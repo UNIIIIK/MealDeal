@@ -1,13 +1,13 @@
 <?php return array(
     'root' => array(
         'name' => 'mealdeal/admin-dashboard',
-        'pretty_version' => '1.0.0+no-version-set',
-        'version' => '1.0.0.0',
-        'reference' => null,
+        'pretty_version' => 'dev-master',
+        'version' => 'dev-master',
+        'reference' => 'cec3b33db53acea27b87962a4bc9c4e934cce7f6',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
-        'dev' => true,
+        'dev' => false,
     ),
     'versions' => array(
         'brick/math' => array(
@@ -137,9 +137,9 @@
             'dev_requirement' => false,
         ),
         'mealdeal/admin-dashboard' => array(
-            'pretty_version' => '1.0.0+no-version-set',
-            'version' => '1.0.0.0',
-            'reference' => null,
+            'pretty_version' => 'dev-master',
+            'version' => 'dev-master',
+            'reference' => 'cec3b33db53acea27b87962a4bc9c4e934cce7f6',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
