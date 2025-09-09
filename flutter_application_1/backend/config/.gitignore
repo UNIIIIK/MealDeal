@@ -1,0 +1,20 @@
+# Firebase service account files
+*firebase-adminsdk*.json
+service-account*.json
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# Composer
+vendor/
+composer.lock
+
+# PHP logs
+*.log
+error.log
+
+# Temporary files
+*.tmp
+*.temp

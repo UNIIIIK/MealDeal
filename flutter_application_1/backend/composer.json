@@ -1,0 +1,20 @@
+{
+    "name": "mealdeal/backend",
+    "description": "MealDeal PHP Backend Services",
+    "type": "project",
+    "require": {
+        "php": ">=7.4",
+        "kreait/firebase-php": "^7.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "MealDeal\\": "src/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit tests/"
+    }
+}

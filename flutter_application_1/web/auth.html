@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Email Verification - MealDeal</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/ui/6.0.1/firebase-ui-auth.js"></script>
+    <link type="text/css" rel="stylesheet" href="https://www.gstatic.com/firebasejs/ui/6.0.1/firebase-ui-auth.css" />
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 400px;
+            margin: 50px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4CAF50;
+            margin-bottom: 20px;
+        }
+        .message {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .loading {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .btn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 15px;
+        }
+        .btn:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🍽️ MealDeal</div>
+        <div id="message" class="message loading">
+            Verifying your email...
+        </div>
+        <div id="action-buttons" style="display: none;">
+            <a href="https://mealdeal-10385.web.app" class="btn">Continue to App</a>
+        </div>
+    </div>
+
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBisWGIXoyfpg1JacZP2Bzo5olBMsz61Tc",
+            authDomain: "mealdeal-10385.firebaseapp.com",
+            projectId: "mealdeal-10385",
+            storageBucket: "mealdeal-10385.appspot.com",
+            messagingSenderId: "53498619282",
+            appId: "1:53498619282:web:376e46a8759810efcd8d4b"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+
+        // Get URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const mode = urlParams.get('mode');
+        const oobCode = urlParams.get('oobCode');
+
+        const messageDiv = document.getElementById('message');
+        const actionButtons = document.getElementById('action-buttons');
+
+        if (mode === 'verifyEmail' && oobCode) {
+            // Verify email
+            firebase.auth().applyActionCode(oobCode)
+                .then(() => {
+                    messageDiv.className = 'message success';
+                    messageDiv.innerHTML = '✅ Email verified successfully!<br>You can now sign in to your account.';
+                    actionButtons.style.display = 'block';
+                })
+                .catch((error) => {
+                    messageDiv.className = 'message error';
+                    messageDiv.innerHTML = '❌ Error verifying email:<br>' + error.message;
+                    actionButtons.style.display = 'block';
+                });
+        } else if (mode === 'resetPassword' && oobCode) {
+            // Handle password reset
+            messageDiv.innerHTML = 'Password reset functionality - please use the app to reset your password.';
+            actionButtons.style.display = 'block';
+        } else {
+            messageDiv.className = 'message error';
+            messageDiv.innerHTML = '❌ Invalid verification link.';
+            actionButtons.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

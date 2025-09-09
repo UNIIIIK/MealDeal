@@ -1,0 +1,48 @@
+{
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/auth-action",
+        "destination": "/auth.html"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "mealdeal-10385",
+          "appId": "1:53498619282:android:c05d2196f71fb236cd8d4b",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "mealdeal-10385",
+          "configurations": {
+            "android": "1:53498619282:android:c05d2196f71fb236cd8d4b",
+            "ios": "1:53498619282:ios:1ddbcd4bee525013cd8d4b",
+            "web": "1:53498619282:web:376e46a8759810efcd8d4b",
+            "windows": "1:53498619282:web:10393a7b682e4ed5cd8d4b"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "database": "(default)",
+    "location": "nam5",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}
