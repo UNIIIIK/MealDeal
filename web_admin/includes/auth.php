@@ -133,11 +133,11 @@ function getRecentReports($limit = 5) {
             $reportData = $report->data();
             $recentReports[] = [
                 'id' => $report->id(),
-                'type' => $reportData['type'],
-                'status' => $reportData['status'],
-                'reporter_name' => $reportData['reporter_name'],
+                'type' => $reportData['type'] ?? 'unknown',
+                'status' => $reportData['status'] ?? 'pending',
+                'reporter_name' => $reportData['reporter_name'] ?? 'Anonymous',
                 'created_at' => $reportData['created_at'],
-                'description' => $reportData['description']
+                'description' => $reportData['description'] ?? 'No description'
             ];
         }
         

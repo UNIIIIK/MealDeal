@@ -3,11 +3,11 @@
         'name' => 'mealdeal/admin-dashboard',
         'pretty_version' => 'dev-master',
         'version' => 'dev-master',
-        'reference' => 'cec3b33db53acea27b87962a4bc9c4e934cce7f6',
+        'reference' => '883af20d53725c490d9e5d479536dc671cd6425c',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
-        'dev' => false,
+        'dev' => true,
     ),
     'versions' => array(
         'brick/math' => array(
@@ -139,7 +139,7 @@
         'mealdeal/admin-dashboard' => array(
             'pretty_version' => 'dev-master',
             'version' => 'dev-master',
-            'reference' => 'cec3b33db53acea27b87962a4bc9c4e934cce7f6',
+            'reference' => '883af20d53725c490d9e5d479536dc671cd6425c',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

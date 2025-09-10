@@ -2,6 +2,7 @@
 session_start();
 require_once 'config/database.php';
 require_once 'includes/auth.php';
+require_once 'includes/data_functions.php';
 
 // Check if admin is logged in
 if (!isAdminLoggedIn()) {
@@ -9,8 +10,9 @@ if (!isAdminLoggedIn()) {
     exit();
 }
 
-// Get dashboard statistics
-$stats = getDashboardStats();
+// Get comprehensive dashboard statistics
+$comprehensiveStats = getComprehensiveDashboardStats();
+$stats = $comprehensiveStats['orders']; // For backward compatibility
 ?>
 
 <!DOCTYPE html>
@@ -112,7 +114,11 @@ $stats = getDashboardStats();
                                         <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
                                             Total Users
                                         </div>
-                                        <div class="h5 mb-0 font-weight-bold text-gray-800"><?php echo number_format($stats['total_users']); ?></div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800"><?php echo number_format($comprehensiveStats['users']['total_users']); ?></div>
+                                        <div class="text-xs text-muted">
+                                            <?php echo $comprehensiveStats['users']['providers']; ?> Providers • 
+                                            <?php echo $comprehensiveStats['users']['consumers']; ?> Consumers
+                                        </div>
                                     </div>
                                     <div class="col-auto">
                                         <i class="fas fa-users fa-2x text-gray-300"></i>
@@ -130,7 +136,10 @@ $stats = getDashboardStats();
                                         <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
                                             Active Listings
                                         </div>
-                                        <div class="h5 mb-0 font-weight-bold text-gray-800"><?php echo number_format($stats['active_listings']); ?></div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800"><?php echo number_format($comprehensiveStats['listings']['active_listings']); ?></div>
+                                        <div class="text-xs text-muted">
+                                            ₱<?php echo number_format($comprehensiveStats['listings']['total_revenue'], 0); ?> Revenue
+                                        </div>
                                     </div>
                                     <div class="col-auto">
                                         <i class="fas fa-list fa-2x text-gray-300"></i>
@@ -148,7 +157,10 @@ $stats = getDashboardStats();
                                         <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
                                             Pending Reports
                                         </div>
-                                        <div class="h5 mb-0 font-weight-bold text-gray-800"><?php echo number_format($stats['pending_reports']); ?></div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800"><?php echo number_format($comprehensiveStats['reports']['pending_reports']); ?></div>
+                                        <div class="text-xs text-muted">
+                                            <?php echo $comprehensiveStats['reports']['total_reports']; ?> Total Reports
+                                        </div>
                                     </div>
                                     <div class="col-auto">
                                         <i class="fas fa-flag fa-2x text-gray-300"></i>
@@ -166,7 +178,10 @@ $stats = getDashboardStats();
                                         <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
                                             Food Saved (kg)
                                         </div>
-                                        <div class="h5 mb-0 font-weight-bold text-gray-800"><?php echo number_format($stats['food_saved'], 1); ?></div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800"><?php echo number_format($comprehensiveStats['orders']['total_food_saved'], 1); ?></div>
+                                        <div class="text-xs text-muted">
+                                            ₱<?php echo number_format($comprehensiveStats['orders']['total_savings'], 0); ?> Saved
+                                        </div>
                                     </div>
                                     <div class="col-auto">
                                         <i class="fas fa-leaf fa-2x text-gray-300"></i>
@@ -177,17 +192,177 @@ $stats = getDashboardStats();
                     </div>
                 </div>
 
+                <!-- Additional Statistics Row -->
+                <div class="row">
+                    <div class="col-xl-3 col-md-6 mb-4">
+                        <div class="card border-left-secondary shadow h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-secondary text-uppercase mb-1">
+                                            Total Orders
+                                        </div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800"><?php echo number_format($comprehensiveStats['orders']['total_orders']); ?></div>
+                                        <div class="text-xs text-muted">
+                                            <?php echo $comprehensiveStats['orders']['completed_orders']; ?> Completed
+                                        </div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-shopping-cart fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-3 col-md-6 mb-4">
+                        <div class="card border-left-dark shadow h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-dark text-uppercase mb-1">
+                                            Avg Order Value
+                                        </div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">₱<?php echo number_format($comprehensiveStats['orders']['average_order_value'], 0); ?></div>
+                                        <div class="text-xs text-muted">
+                                            Per Transaction
+                                        </div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-3 col-md-6 mb-4">
+                        <div class="card border-left-light shadow h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-light text-uppercase mb-1">
+                                            Recent Signups
+                                        </div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800"><?php echo number_format($comprehensiveStats['users']['recent_signups']); ?></div>
+                                        <div class="text-xs text-muted">
+                                            Last 7 Days
+                                        </div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-user-plus fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-3 col-md-6 mb-4">
+                        <div class="card border-left-danger shadow h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                            Verified Users
+                                        </div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800"><?php echo number_format($comprehensiveStats['users']['verified_users']); ?></div>
+                                        <div class="text-xs text-muted">
+                                            <?php echo $comprehensiveStats['users']['total_users'] > 0 ? round(($comprehensiveStats['users']['verified_users'] / $comprehensiveStats['users']['total_users']) * 100, 1) : 0; ?>% of Total
+                                        </div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Recent Activity -->
                 <div class="row">
-                    <div class="col-lg-12">
+                    <div class="col-lg-6">
                         <div class="card shadow mb-4">
                             <div class="card-header py-3">
                                 <h6 class="m-0 font-weight-bold text-primary">Recent Reports</h6>
                             </div>
                             <div class="card-body">
-                                <div id="recent-reports">
-                                    <!-- Recent reports will be loaded here -->
-                                </div>
+                                <?php if (!empty($comprehensiveStats['reports']['recent_reports'])): ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>Type</th>
+                                                    <th>Reporter</th>
+                                                    <th>Status</th>
+                                                    <th>Date</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php foreach (array_slice($comprehensiveStats['reports']['recent_reports'], 0, 5) as $report): ?>
+                                                <tr>
+                                                    <td>
+                                                        <span class="badge badge-<?php echo $report['type'] === 'inappropriate' ? 'danger' : ($report['type'] === 'poor_quality' ? 'warning' : 'info'); ?>">
+                                                            <?php echo ucfirst(str_replace('_', ' ', $report['type'])); ?>
+                                                        </span>
+                                                    </td>
+                                                    <td><?php echo htmlspecialchars($report['reporter_name']); ?></td>
+                                                    <td>
+                                                        <span class="badge badge-<?php echo $report['status'] === 'pending' ? 'warning' : 'success'; ?>">
+                                                            <?php echo ucfirst($report['status']); ?>
+                                                        </span>
+                                                    </td>
+                                                    <td><?php echo date('M j, Y', strtotime($report['created_at'])); ?></td>
+                                                </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php else: ?>
+                                    <p class="text-muted">No recent reports found.</p>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-lg-6">
+                        <div class="card shadow mb-4">
+                            <div class="card-header py-3">
+                                <h6 class="m-0 font-weight-bold text-success">Top Providers</h6>
+                            </div>
+                            <div class="card-body">
+                                <?php if (!empty($comprehensiveStats['top_providers'])): ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>Provider</th>
+                                                    <th>Listings</th>
+                                                    <th>Revenue</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php foreach (array_slice($comprehensiveStats['top_providers'], 0, 5) as $provider): ?>
+                                                <tr>
+                                                    <td>
+                                                        <div>
+                                                            <strong><?php echo htmlspecialchars($provider['name']); ?></strong>
+                                                            <br><small class="text-muted"><?php echo htmlspecialchars($provider['email']); ?></small>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge badge-primary"><?php echo $provider['active_listings']; ?> Active</span>
+                                                        <br><small class="text-muted"><?php echo $provider['total_listings']; ?> Total</small>
+                                                    </td>
+                                                    <td>₱<?php echo number_format($provider['total_revenue'], 0); ?></td>
+                                                </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php else: ?>
+                                    <p class="text-muted">No provider data available.</p>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
