@@ -6,6 +6,7 @@ import '../provider/create_listing_screen.dart';
 import '../provider/notifications_screen.dart';
 import 'listing_detail_screen.dart';
 import 'cart_screen.dart';
+import 'checkout_screen.dart';
 import 'report_dialog.dart';
 
 class FeedScreen extends StatefulWidget {
@@ -28,7 +29,40 @@ class _FeedScreenState extends State<FeedScreen> {
     'vegetables',
     'meat',
     'prepared',
+    'beverages',
+    'snacks',
+    'frozen',
+    'canned',
+    'other',
   ];
+
+  // Mapping from provider food types to consumer categories
+  String _mapFoodTypeToCategory(String foodType) {
+    switch (foodType.toLowerCase()) {
+      case 'bakery & pastries':
+        return 'bakery';
+      case 'dairy products':
+        return 'dairy';
+      case 'fruits & vegetables':
+        return 'fruits';
+      case 'meat & seafood':
+        return 'meat';
+      case 'prepared foods':
+        return 'prepared';
+      case 'beverages':
+        return 'beverages';
+      case 'snacks & confectionery':
+        return 'snacks';
+      case 'frozen foods':
+        return 'frozen';
+      case 'canned goods':
+        return 'canned';
+      case 'other':
+        return 'other';
+      default:
+        return 'other';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +92,33 @@ class _FeedScreenState extends State<FeedScreen> {
         backgroundColor: Colors.green.shade600,
         elevation: 0,
         title: const Text('Home', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        actions: [
+          Consumer<AuthService>(
+            builder: (context, authService, child) {
+              return IconButton(
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.notifications,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => NotificationsScreen(providerId: authService.currentUser!.uid),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ],
       ) : AppBar(
         backgroundColor: Colors.green.shade600,
         elevation: 0,
@@ -568,7 +629,8 @@ class _FeedScreenState extends State<FeedScreen> {
                       final filteredListings = listings.where((doc) {
                         final data = doc.data() as Map<String, dynamic>;
                         final title = (data['title'] ?? '').toString().toLowerCase();
-                        final category = (data['category'] ?? 'all').toString().toLowerCase();
+                        final foodType = (data['food_type'] ?? '').toString();
+                        final category = _mapFoodTypeToCategory(foodType);
                         
                         final matchesSearch = _searchQuery.isEmpty || title.contains(_searchQuery.toLowerCase());
                         final matchesCategory = _selectedCategory == 'all' || category == _selectedCategory;
@@ -634,7 +696,9 @@ class _FeedScreenState extends State<FeedScreen> {
     final originalPrice = (data['original_price'] ?? 0.0) as double;
     final discountedPrice = (data['discounted_price'] ?? 0.0) as double;
     final quantity = (data['quantity'] ?? 0) as int;
-    final imageUrl = data['images'] != null && (data['images'] as List).isNotEmpty 
+    final imageUrl = data['images'] != null && 
+        data['images'] is List && 
+        (data['images'] as List).isNotEmpty 
         ? (data['images'] as List).first 
         : null;
     final description = (data['description'] ?? '').toString();
@@ -708,46 +772,47 @@ class _FeedScreenState extends State<FeedScreen> {
                             ),
                     ),
                   ),
-                  // Enhanced discount badge
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.red.shade500, Colors.red.shade600],
-                        ),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.2),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
+                  // Enhanced discount badge (only for consumers)
+                  if (authService.hasRole('food_consumer'))
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.red.shade500, Colors.red.shade600],
                           ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.local_offer,
-                            color: Colors.white,
-                            size: 14,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '$calculatedDiscount% OFF',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.local_offer,
+                              color: Colors.white,
+                              size: 14,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '$calculatedDiscount% OFF',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
                   // Report Button (only for consumers)
                   if (authService.hasRole('food_consumer'))
                     Positioned(
@@ -872,28 +937,54 @@ class _FeedScreenState extends State<FeedScreen> {
                       
                       // Action buttons (removed View button as requested)
                       if (authService.hasRole('food_consumer'))
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: () => _addToCart(context, doc, data),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.orange.shade400,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () => _addToCart(context, doc, data),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange.shade400,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  elevation: 2,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.add_shopping_cart, size: 14),
+                                    const SizedBox(width: 4),
+                                    Text('Add to Cart', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
                               ),
-                              elevation: 2,
                             ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.add_shopping_cart, size: 14),
-                                const SizedBox(width: 4),
-                                Text('Add to Cart', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                              ],
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () => _buyNow(context, doc, data),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green.shade600,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  elevation: 2,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.shopping_bag, size: 14),
+                                    const SizedBox(width: 4),
+                                    Text('Buy Now', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         )
                       else
                         // Provider view - show delete button
@@ -999,6 +1090,27 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
+  void _buyNow(BuildContext context, DocumentSnapshot doc, Map<String, dynamic> data) {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    
+    if (authService.currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to buy items')),
+      );
+      return;
+    }
+
+    if (!authService.hasRole('food_consumer')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Only food consumers can buy items')),
+      );
+      return;
+    }
+
+    // Add to cart and navigate to checkout
+    _addItemToCartAndCheckout(doc.id, data);
+  }
+
   void _addToCart(BuildContext context, DocumentSnapshot doc, Map<String, dynamic> data) {
     final authService = Provider.of<AuthService>(context, listen: false);
     
@@ -1054,7 +1166,9 @@ class _FeedScreenState extends State<FeedScreen> {
           'title': data['title'],
           'price': data['discounted_price'],
           'quantity': 1,
-          'image': data['images']?.isNotEmpty == true ? data['images'][0] : null,
+          'image': data['images'] is List && (data['images'] as List).isNotEmpty 
+              ? (data['images'] as List)[0] 
+              : null,
         }]),
         'total_price': FieldValue.increment(data['discounted_price'] ?? 0.0),
       });
@@ -1063,6 +1177,85 @@ class _FeedScreenState extends State<FeedScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${data['title']} added to cart!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error adding to cart: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _addItemToCartAndCheckout(String listingId, Map<String, dynamic> data) async {
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final userId = authService.currentUser!.uid;
+
+      // Check if user already has a cart
+      final cartQuery = await FirebaseFirestore.instance
+          .collection('cart')
+          .where('consumer_id', isEqualTo: userId)
+          .where('status', isEqualTo: 'pending')
+          .get();
+
+      DocumentReference cartRef;
+      
+      if (cartQuery.docs.isEmpty) {
+        // Create new cart
+        cartRef = await FirebaseFirestore.instance.collection('cart').add({
+          'consumer_id': userId,
+          'items': [],
+          'total_price': 0.0,
+          'status': 'pending',
+          'created_at': FieldValue.serverTimestamp(),
+        });
+      } else {
+        cartRef = cartQuery.docs.first.reference;
+      }
+
+      // Add item to cart
+      await cartRef.update({
+        'items': FieldValue.arrayUnion([{
+          'listing_id': listingId,
+          'title': data['title'],
+          'price': data['discounted_price'],
+          'quantity': 1,
+          'image': data['images'] is List && (data['images'] as List).isNotEmpty 
+              ? (data['images'] as List)[0] 
+              : null,
+        }]),
+        'total_price': FieldValue.increment(data['discounted_price'] ?? 0.0),
+      });
+
+      if (!mounted) return;
+      
+      // Navigate directly to checkout screen
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => CheckoutScreen(
+            cartId: cartRef.id,
+            items: [{
+              'listing_id': listingId,
+              'title': data['title'],
+              'price': data['discounted_price'],
+              'quantity': 1,
+              'image': data['images'] is List && (data['images'] as List).isNotEmpty 
+              ? (data['images'] as List)[0] 
+              : null,
+            }],
+            totalPrice: data['discounted_price'] ?? 0.0,
+          ),
+        ),
+      );
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${data['title']} added to cart and ready for checkout!'),
           backgroundColor: Colors.green,
         ),
       );

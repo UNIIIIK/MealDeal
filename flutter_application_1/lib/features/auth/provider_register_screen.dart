@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 
 class ProviderRegisterScreen extends StatefulWidget {
   const ProviderRegisterScreen({super.key});
@@ -31,6 +32,8 @@ class _ProviderRegisterScreenState extends State<ProviderRegisterScreen> with Ti
   
   File? _businessPermitImage;
   File? _validIdImage;
+  Uint8List? _businessPermitImageBytes;
+  Uint8List? _validIdImageBytes;
   final ImagePicker _picker = ImagePicker();
 
   late AnimationController _fadeController;
@@ -75,11 +78,14 @@ class _ProviderRegisterScreenState extends State<ProviderRegisterScreen> with Ti
     try {
       final XFile? image = await _picker.pickImage(source: source, maxWidth: 1920, maxHeight: 1080);
       if (image != null) {
+        final bytes = await image.readAsBytes();
         setState(() {
           if (isBusinessPermit) {
-            _businessPermitImage = File(image.path);
+            _businessPermitImage = kIsWeb ? null : File(image.path);
+            _businessPermitImageBytes = bytes;
           } else {
-            _validIdImage = File(image.path);
+            _validIdImage = kIsWeb ? null : File(image.path);
+            _validIdImageBytes = bytes;
           }
         });
       }
@@ -132,9 +138,9 @@ class _ProviderRegisterScreenState extends State<ProviderRegisterScreen> with Ti
                _businessNameController.text.isNotEmpty &&
                _businessAddressController.text.isNotEmpty;
       case 1: // Business Permit
-        return _businessPermitImage != null;
+        return _businessPermitImageBytes != null;
       case 2: // Valid ID
-        return _validIdImage != null;
+        return _validIdImageBytes != null;
       case 3: // Password
         return _passwordController.text.isNotEmpty &&
                _confirmPasswordController.text.isNotEmpty &&
@@ -203,8 +209,8 @@ class _ProviderRegisterScreenState extends State<ProviderRegisterScreen> with Ti
           'business_name': businessName,
           'business_address': businessAddress,
           'role': role,
-          'business_permit_image': _businessPermitImage?.path,
-          'valid_id_image': _validIdImage?.path,
+          'business_permit_image': kIsWeb ? _businessPermitImageBytes : _businessPermitImage?.path,
+          'valid_id_image': kIsWeb ? _validIdImageBytes : _validIdImage?.path,
         }),
       );
 
@@ -547,13 +553,18 @@ class _ProviderRegisterScreenState extends State<ProviderRegisterScreen> with Ti
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: Colors.grey.shade300),
           ),
-          child: _businessPermitImage != null
+          child: _businessPermitImageBytes != null
               ? ClipRRect(
                   borderRadius: BorderRadius.circular(16),
-                  child: Image.file(
-                    _businessPermitImage!,
-                    fit: BoxFit.cover,
-                  ),
+                  child: kIsWeb 
+                    ? Image.memory(
+                        _businessPermitImageBytes!,
+                        fit: BoxFit.cover,
+                      )
+                    : Image.file(
+                        _businessPermitImage!,
+                        fit: BoxFit.cover,
+                      ),
                 )
               : Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -588,7 +599,7 @@ class _ProviderRegisterScreenState extends State<ProviderRegisterScreen> with Ti
         ElevatedButton.icon(
           onPressed: () => _showImagePicker(true),
           icon: const Icon(Icons.camera_alt),
-          label: Text(_businessPermitImage != null ? 'Change Image' : 'Select Image'),
+          label: Text(_businessPermitImageBytes != null ? 'Change Image' : 'Select Image'),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.orange.shade600,
             foregroundColor: Colors.white,
@@ -632,13 +643,18 @@ class _ProviderRegisterScreenState extends State<ProviderRegisterScreen> with Ti
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: Colors.grey.shade300),
           ),
-          child: _validIdImage != null
+          child: _validIdImageBytes != null
               ? ClipRRect(
                   borderRadius: BorderRadius.circular(16),
-                  child: Image.file(
-                    _validIdImage!,
-                    fit: BoxFit.cover,
-                  ),
+                  child: kIsWeb 
+                    ? Image.memory(
+                        _validIdImageBytes!,
+                        fit: BoxFit.cover,
+                      )
+                    : Image.file(
+                        _validIdImage!,
+                        fit: BoxFit.cover,
+                      ),
                 )
               : Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -673,7 +689,7 @@ class _ProviderRegisterScreenState extends State<ProviderRegisterScreen> with Ti
         ElevatedButton.icon(
           onPressed: () => _showImagePicker(false),
           icon: const Icon(Icons.camera_alt),
-          label: Text(_validIdImage != null ? 'Change Image' : 'Select Image'),
+          label: Text(_validIdImageBytes != null ? 'Change Image' : 'Select Image'),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.orange.shade600,
             foregroundColor: Colors.white,

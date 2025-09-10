@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../auth/auth_service.dart';
-import 'report_dialog.dart';
 
 class ListingDetailScreen extends StatefulWidget {
   final String listingId;
@@ -100,8 +99,10 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           'title': widget.listingData['title'],
           'price': widget.listingData['discounted_price'],
           'quantity': _quantity,
-          'image': widget.listingData['images']?.isNotEmpty == true 
-              ? widget.listingData['images'][0] : null,
+          'image': widget.listingData['images'] is List && 
+              (widget.listingData['images'] as List).isNotEmpty 
+              ? (widget.listingData['images'] as List)[0] 
+              : null,
         }]),
         'total_price': FieldValue.increment(itemPrice),
       });
@@ -128,15 +129,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     }
   }
 
-  void _reportListing() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return ReportDialog(listing: widget.listingData);
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final expiryRaw = widget.listingData['expiry_datetime'];
@@ -148,27 +140,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       appBar: AppBar(
         title: Text(widget.listingData['title'] ?? 'Listing Details'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        actions: [
-          PopupMenuButton(
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'report',
-                child: Row(
-                  children: [
-                    Icon(Icons.flag, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Report'),
-                  ],
-                ),
-              ),
-            ],
-            onSelected: (value) {
-              if (value == 'report') {
-                _reportListing();
-              }
-            },
-          ),
-        ],
+        actions: [],
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -178,12 +150,13 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             SizedBox(
               height: 300,
               child: widget.listingData['images'] != null && 
+                     widget.listingData['images'] is List &&
                      (widget.listingData['images'] as List).isNotEmpty
                   ? PageView.builder(
                       itemCount: (widget.listingData['images'] as List).length,
                       itemBuilder: (context, index) {
                         return Image.network(
-                          widget.listingData['images'][index],
+                          (widget.listingData['images'] as List)[index],
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) {
                             return Container(
@@ -317,7 +290,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            widget.listingData['allergens'] ?? 'No allergen information',
+                            widget.listingData['allergens'] is List
+                                ? (widget.listingData['allergens'] as List).join(', ')
+                                : (widget.listingData['allergens'] ?? 'No allergen information').toString(),
                             style: TextStyle(
                               color: Colors.red.shade700,
                               fontWeight: FontWeight.bold,

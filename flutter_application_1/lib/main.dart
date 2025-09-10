@@ -13,6 +13,7 @@ import 'features/provider/analytics_screen.dart';
 import 'features/provider/my_listings_screen.dart';
 import 'features/provider/location_management_screen.dart';
 import 'features/consumer/my_claims_screen.dart';
+import 'features/consumer/my_orders_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -303,6 +304,100 @@ class ProfileScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 
+                // Consumer-specific: My Purchases quick actions
+                if (isConsumer) ...[
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Text(
+                                'My Purchases',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const Spacer(),
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) => const MyOrdersScreen(),
+                                    ),
+                                  );
+                                },
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text('View Purchase History'),
+                                    SizedBox(width: 4),
+                                    Icon(Icons.chevron_right, size: 18),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              _PurchaseTile(
+                                icon: Icons.account_balance_wallet_outlined,
+                                label: 'To Pay',
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) => const MyOrdersScreen(initialFilter: 'pending'),
+                                    ),
+                                  );
+                                },
+                              ),
+                              _PurchaseTile(
+                                icon: Icons.local_shipping_outlined,
+                                label: 'To Ship',
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) => const MyOrdersScreen(initialFilter: 'awaiting_pickup'),
+                                    ),
+                                  );
+                                },
+                              ),
+                              _PurchaseTile(
+                                icon: Icons.local_mall_outlined,
+                                label: 'To Receive',
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) => const MyOrdersScreen(initialFilter: 'claimed'),
+                                    ),
+                                  );
+                                },
+                              ),
+                              _PurchaseTile(
+                                icon: Icons.star_border,
+                                label: 'To Rate',
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) => const MyOrdersScreen(initialFilter: 'checked_out'),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                
                 // Consumer-specific: My Claims section
                 if (isConsumer) ...[
                   InkWell(
@@ -344,47 +439,6 @@ class ProfileScreen extends StatelessWidget {
                   const SizedBox(height: 16),
                 ],
                 
-                // Provider notifications bell
-                if (authService.hasRole('food_provider'))
-                  StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('notifications')
-                        .where('provider_id', isEqualTo: authService.currentUser!.uid)
-                        .where('read', isEqualTo: false)
-                        .snapshots(),
-                    builder: (context, snap) {
-                      final unread = snap.data?.docs.length ?? 0;
-                      if (unread == 0) return const SizedBox.shrink();
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.yellow.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.yellow.shade200),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.notifications_active, color: Colors.orange.shade700),
-                            const SizedBox(width: 8),
-                            Expanded(child: Text('You have $unread new notification(s).')),
-                            TextButton(
-                              onPressed: () async {
-                                final docs = snap.data?.docs ?? [];
-                                for (final d in docs) {
-                                  await d.reference.update({'read': true});
-                                }
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Marked notifications as read')));
-                                }
-                              },
-                              child: const Text('Mark read'),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
 
                 // Provider-specific: My Listings section
                 if (authService.hasRole('food_provider')) ...[
@@ -805,6 +859,49 @@ class ProfileScreen extends StatelessWidget {
             size: 20,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PurchaseTile extends StatelessWidget {
+  const _PurchaseTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Icon(icon, size: 28, color: Colors.grey.shade800),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(label, style: const TextStyle(fontSize: 12)),
+          ],
+        ),
       ),
     );
   }
