@@ -9,11 +9,30 @@ class Database {
     private $firestore;
 
     private function __construct() {
-        // Initialize Firestore client
-        $this->firestore = new FirestoreClient([
-            'projectId' => 'mealdeal-10385', // Replace with your Firebase project ID
-            'keyFilePath' => __DIR__ . '/firebase-credentials.json' // Path to your Firebase service account key
-        ]);
+        try {
+            // Check if credentials file exists
+            $keyPath = __DIR__ . '/firebase-credentials.json';
+            if (!file_exists($keyPath)) {
+                throw new Exception('Firebase credentials file not found at: ' . $keyPath);
+            }
+            
+            // Validate JSON structure
+            $keyData = json_decode(file_get_contents($keyPath), true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                throw new Exception('Invalid JSON in credentials file: ' . json_last_error_msg());
+            }
+            
+            // Initialize Firestore client with error handling
+            $this->firestore = new FirestoreClient([
+                'projectId' => 'mealdeal-10385',
+                'keyFilePath' => $keyPath,
+                'retries' => 1, // Limit retries to prevent infinite loops
+                'timeout' => 10 // 10 second timeout
+            ]);
+        } catch (Exception $e) {
+            error_log('Firestore initialization failed: ' . $e->getMessage());
+            throw new Exception('Database connection failed: ' . $e->getMessage());
+        }
     }
 
     public static function getInstance() {

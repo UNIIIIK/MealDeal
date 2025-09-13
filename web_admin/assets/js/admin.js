@@ -12,20 +12,57 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Auto-refresh dashboard stats every 30 seconds
-    setInterval(function() {
-        if (window.location.pathname === '/index.php' || window.location.pathname === '/') {
-            refreshStats();
+    const isDashboard = location.pathname.endsWith('/index.php') || location.pathname === '/' || location.pathname.endsWith('/');
+    if (isDashboard) {
+        // Kick off an immediate fetch so cards populate quickly
+        refreshStats();
+        // Then refresh every 30s
+        setInterval(refreshStats, 30000);
+    }
+
+    // Provide reports helpers on pages that include only admin.js
+    if (typeof window.viewReportDetails !== 'function') {
+        window.viewReportDetails = function(reportId) {
+            const detailsUrl = 'reports.php?view=' + encodeURIComponent(reportId);
+            if (window.location.pathname.endsWith('/reports.php')) {
+                const rowBtn = document.querySelector(`button[onclick="viewReportDetails('${reportId}')"]`);
+                const row = rowBtn ? rowBtn.closest('tr') : null;
+                const descCell = row ? row.querySelector('td:nth-child(5)') : null;
+                alert('Report ID: ' + reportId + (descCell ? '\n\n' + descCell.innerText.trim() : ''));
+            } else {
+                window.location.href = detailsUrl;
+            }
         }
-    }, 30000);
+
+        window.showWarningModal = function(reportId) {
+            const idField = document.getElementById('warningReportId');
+            if (idField) idField.value = reportId;
+            const modal = new bootstrap.Modal(document.getElementById('warningModal'));
+            modal.show();
+        }
+
+        window.showBanModal = function(reportId) {
+            const idField = document.getElementById('banReportId');
+            if (idField) idField.value = reportId;
+            const modal = new bootstrap.Modal(document.getElementById('banModal'));
+            modal.show();
+        }
+
+        window.resolveReport = function(reportId) { postAction('resolve', reportId); }
+        window.dismissReport = function(reportId) { postAction('dismiss', reportId); }
+
+        window.refreshReports = function() { location.reload(); }
+    }
 });
 
 // Dashboard Functions
 function refreshStats() {
-    fetch('api/get_stats.php')
+    // Prefer the comprehensive stats endpoint; fall back if unavailable
+    fetch('api/get_comprehensive_stats.php')
         .then(response => response.json())
         .then(data => {
-            if (data.success) {
-                updateDashboardStats(data.stats);
+            if (data.success && data.data) {
+                updateDashboardStatsFromComprehensive(data.data);
                 showNotification('Stats refreshed successfully', 'success');
             } else {
                 showNotification('Failed to refresh stats', 'error');
@@ -35,6 +72,47 @@ function refreshStats() {
             console.error('Error refreshing stats:', error);
             showNotification('Error refreshing stats', 'error');
         });
+}
+
+function updateDashboardStatsFromComprehensive(stats) {
+    // Map to the existing UI elements
+    const totalUsersEl = document.querySelector('.border-left-primary .h5');
+    const activeListingsEl = document.querySelector('.border-left-success .h5');
+    const pendingReportsEl = document.querySelector('.border-left-warning .h5');
+    const foodSavedEl = document.querySelector('.border-left-info .h5');
+
+    if (totalUsersEl && stats.users) totalUsersEl.textContent = formatNumber(stats.users.total_users || 0);
+    if (activeListingsEl && stats.listings) activeListingsEl.textContent = formatNumber(stats.listings.active_listings || 0);
+    if (pendingReportsEl && stats.reports) pendingReportsEl.textContent = formatNumber(stats.reports.pending_reports || 0);
+    if (foodSavedEl && stats.orders) foodSavedEl.textContent = formatNumber((stats.orders.total_food_saved || 0), 1);
+
+    // Secondary lines under cards
+    const usersBreakdown = document.querySelector('.border-left-primary .text-xs.text-muted');
+    if (usersBreakdown && stats.users) {
+        usersBreakdown.innerHTML = `${stats.users.providers || 0} Providers • ${stats.users.consumers || 0} Consumers`;
+    }
+    const listingsRevenue = document.querySelector('.border-left-success .text-xs.text-muted');
+    if (listingsRevenue && stats.listings) {
+        listingsRevenue.innerHTML = `₱${formatNumber(stats.listings.total_revenue || 0)} Revenue`;
+    }
+    const reportsTotal = document.querySelector('.border-left-warning .text-xs.text-muted');
+    if (reportsTotal && stats.reports) {
+        reportsTotal.innerHTML = `${stats.reports.total_reports || 0} Total Reports`;
+    }
+    const savingsText = document.querySelector('.border-left-info .text-xs.text-muted');
+    if (savingsText && stats.orders) {
+        savingsText.innerHTML = `₱${formatNumber(stats.orders.total_savings || 0)} Saved`;
+    }
+
+    // Additional cards
+    const totalOrdersEl = document.querySelector('.border-left-secondary .h5');
+    if (totalOrdersEl && stats.orders) totalOrdersEl.textContent = formatNumber(stats.orders.total_orders || 0);
+    const completedOrdersText = document.querySelector('.border-left-secondary .text-xs.text-muted');
+    if (completedOrdersText && stats.orders) completedOrdersText.innerHTML = `${stats.orders.completed_orders || 0} Completed`;
+    const avgOrderEl = document.querySelector('.border-left-dark .h5');
+    if (avgOrderEl && stats.orders) avgOrderEl.textContent = `₱${formatNumber(stats.orders.average_order_value || 0)}`;
+    const recentSignupsEl = document.querySelector('.col-xl-3.col-md-6.mb-4 .card .h5.mb-0.font-weight-bold.text-gray-800');
+    // Not reliable selector for recent signups; skip unless needed
 }
 
 function updateDashboardStats(stats) {

@@ -15,18 +15,19 @@ class PickupRouteScreen extends StatefulWidget {
 }
 
 class _PickupRouteScreenState extends State<PickupRouteScreen> {
-  bool _claiming = false;
   ll.LatLng? _consumerLocation;
   ll.LatLng? _providerLocation;
   List<ll.LatLng> _routePoints = [];
   bool _loadingRoute = false;
   String? _customerAddress;
   Map<String, dynamic>? _routeInfo; // Added _routeInfo
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _cartStream;
 
   @override
   void initState() {
     super.initState();
     _initializeLocations();
+    _listenForProviderPickup();
   }
 
   Future<void> _initializeLocations() async {
@@ -80,6 +81,27 @@ class _PickupRouteScreenState extends State<PickupRouteScreen> {
     }
   }
 
+  void _listenForProviderPickup() {
+    _cartStream = FirebaseFirestore.instance
+        .collection('cart')
+        .doc(widget.cartId)
+        .snapshots();
+
+    _cartStream!.listen((doc) async {
+      final data = doc.data() ?? {};
+      final status = data['status'] as String?;
+      if (!mounted) return;
+      if (status == 'claimed') {
+        // Navigate to confirmation screen when provider marks as picked up
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => _PickupConfirmationScreen(cartId: widget.cartId),
+          ),
+        );
+      }
+    });
+  }
+
   Future<void> _calculateRoute() async {
     setState(() => _loadingRoute = true);
     
@@ -110,159 +132,7 @@ class _PickupRouteScreenState extends State<PickupRouteScreen> {
     }
   }
 
-  Future<void> _markClaimed() async {
-    setState(() => _claiming = true);
-    
-    try {
-      // Update cart status to claimed
-      await FirebaseFirestore.instance
-          .collection('cart')
-          .doc(widget.cartId)
-          .update({
-        'status': 'claimed',
-        'claimed_at': FieldValue.serverTimestamp(),
-      });
-
-      // Write provider notification and placeholder review doc if present
-      try {
-        final cartDoc = await FirebaseFirestore.instance.collection('cart').doc(widget.cartId).get();
-        final cartData = cartDoc.data();
-        final items = (cartData?['items'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-        String? providerId;
-        if (items.isNotEmpty) {
-          final listingId = items.first['listing_id'];
-          if (listingId != null) {
-            final listingDoc = await FirebaseFirestore.instance.collection('listings').doc(listingId).get();
-            providerId = (listingDoc.data() ?? {})['provider_id'];
-          }
-        }
-        if (providerId != null) {
-          await FirebaseFirestore.instance.collection('notifications').add({
-            'provider_id': providerId,
-            'type': 'order_claimed',
-            'cart_id': widget.cartId,
-            'created_at': FieldValue.serverTimestamp(),
-            'read': false,
-            'message': 'A customer marked the order as claimed.'
-          });
-        }
-      } catch (e) {
-        debugPrint('Failed to write notification: $e');
-      }
-
-      if (!mounted) return;
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Order claimed successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      
-      // Ask for review/report after claiming
-      if (mounted) {
-        final review = await showModalBottomSheet<Map<String, dynamic>?>(
-          context: context,
-          isScrollControlled: true,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-          ),
-          builder: (context) {
-            int rating = 0; // Captured in submit payload
-            final TextEditingController controller = TextEditingController();
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-                left: 16,
-                right: 16,
-                top: 12,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.reviews, color: Colors.green.shade700),
-                      const SizedBox(width: 8),
-                      const Text('How was the pickup?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  StatefulBuilder(
-                    builder: (context, setInnerState) {
-                      return Row(
-                        children: List.generate(5, (i) {
-                          final filled = i < rating;
-                          return IconButton(
-                            onPressed: () { setInnerState(() { rating = i + 1; }); },
-                            icon: Icon(filled ? Icons.star : Icons.star_border, color: Colors.amber.shade600),
-                          );
-                        }),
-                      );
-                    },
-                  ),
-                  TextField(
-                    controller: controller,
-                    decoration: const InputDecoration(
-                      labelText: 'Leave a note or report (optional)',
-                    ),
-                    maxLines: 3,
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.of(context).pop({'rating': rating, 'comment': controller.text});
-                      },
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade600, foregroundColor: Colors.white),
-                      child: const Text('Submit'),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-        try {
-          if (review != null) {
-            String? providerId;
-            final cartDoc = await FirebaseFirestore.instance.collection('cart').doc(widget.cartId).get();
-            final items = ((cartDoc.data() ?? {})['items'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-            if (items.isNotEmpty) {
-              final listingId = items.first['listing_id'];
-              if (listingId != null) {
-                final listingDoc = await FirebaseFirestore.instance.collection('listings').doc(listingId).get();
-                providerId = (listingDoc.data() ?? {})['provider_id'];
-              }
-            }
-            await FirebaseFirestore.instance.collection('reviews').add({
-              'cart_id': widget.cartId,
-              'provider_id': providerId,
-              'rating': review['rating'] ?? 0,
-              'comment': review['comment'] ?? '',
-              'created_at': FieldValue.serverTimestamp(),
-            });
-          }
-        } catch (e) {
-          debugPrint('Failed to save review: $e');
-        }
-
-        Navigator.of(context).pop(true);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to claim order: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _claiming = false);
-    }
-  }
+  // Consumer no longer marks as claimed; provider does this.
 
 
 
@@ -445,34 +315,8 @@ class _PickupRouteScreenState extends State<PickupRouteScreen> {
             child: _buildMap(),
           ),
           
-          // Action Button
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _claiming ? null : _markClaimed,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green.shade600,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: _claiming
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : const Text('Mark as Claimed'),
-              ),
-            ),
-          ),
+          // No consumer claim action here per requirements
+          const SizedBox(height: 12),
         ],
       ),
     );
@@ -575,6 +419,210 @@ class _PickupRouteScreenState extends State<PickupRouteScreen> {
                   size: 20,
                 ),
               ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _PickupConfirmationScreen extends StatelessWidget {
+  const _PickupConfirmationScreen({required this.cartId});
+  final String cartId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Pickup Confirmed'),
+        backgroundColor: Colors.green.shade600,
+        foregroundColor: Colors.white,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.green.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.green.shade700, size: 28),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Food is picked up — enjoy!',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            _RatingAndIssueForm(cartId: cartId),
+            const Spacer(),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green.shade600,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RatingAndIssueForm extends StatefulWidget {
+  const _RatingAndIssueForm({required this.cartId});
+  final String cartId;
+
+  @override
+  State<_RatingAndIssueForm> createState() => _RatingAndIssueFormState();
+}
+
+class _RatingAndIssueFormState extends State<_RatingAndIssueForm> {
+  int _rating = 0;
+  final TextEditingController _comment = TextEditingController();
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _comment.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    setState(() => _submitting = true);
+    try {
+      await FirebaseFirestore.instance.collection('cart').doc(widget.cartId).update({
+        'rating': _rating,
+        'rating_comment': _comment.text.trim(),
+        'rated_at': FieldValue.serverTimestamp(),
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Thanks for your feedback!'), backgroundColor: Colors.green),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to submit: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _reportIssue() async {
+    final TextEditingController issueCtrl = TextEditingController();
+    String? selectedCategory;
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+            left: 16,
+            right: 16,
+            top: 16,
+          ),
+          child: StatefulBuilder(
+            builder: (context, setInner) => Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Report an issue', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    'Missing items', 'Quality issue', 'Wrong order', 'Other',
+                  ].map((c) => ChoiceChip(
+                    label: Text(c),
+                    selected: selectedCategory == c,
+                    onSelected: (sel) => setInner(() => selectedCategory = sel ? c : null),
+                  )).toList(),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: issueCtrl,
+                  decoration: const InputDecoration(labelText: 'Describe the issue'),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      await FirebaseFirestore.instance.collection('issues').add({
+                        'cart_id': widget.cartId,
+                        'category': selectedCategory,
+                        'description': issueCtrl.text.trim(),
+                        'created_at': FieldValue.serverTimestamp(),
+                      });
+                      if (context.mounted) Navigator.of(context).pop();
+                    },
+                    child: const Text('Send'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Report submitted.'), backgroundColor: Colors.green),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("How's your food?", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Row(
+          children: List.generate(5, (i) => IconButton(
+            onPressed: () => setState(() => _rating = i + 1),
+            icon: Icon(i < _rating ? Icons.star : Icons.star_border, color: Colors.amber),
+          )),
+        ),
+        TextField(
+          controller: _comment,
+          decoration: const InputDecoration(labelText: 'Leave a comment (optional)'),
+          maxLines: 3,
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _submitting ? null : _submit,
+                child: _submitting ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Submit rating'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: _reportIssue,
+              child: const Text('Report an issue'),
             ),
           ],
         ),

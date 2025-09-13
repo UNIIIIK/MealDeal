@@ -2,10 +2,13 @@
 session_start();
 require_once 'includes/auth.php';
 
-// Redirect if already logged in
-if (isAdminLoggedIn()) {
-    header('Location: index.php');
-    exit();
+// Clear session only when viewing the form (GET). Do NOT destroy during POST login.
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    logoutAdmin();
+    // Reopen a fresh session for the login flow after destruction
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
 }
 
 $error = '';

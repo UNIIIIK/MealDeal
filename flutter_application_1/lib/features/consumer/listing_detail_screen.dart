@@ -3,6 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../auth/auth_service.dart';
+import '../../services/messaging_service.dart';
+import '../../models/message.dart';
+import '../messaging/chat_screen.dart';
 
 class ListingDetailScreen extends StatefulWidget {
   final String listingId;
@@ -22,6 +25,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   int _quantity = 1;
   bool _isLoading = false;
   Map<String, dynamic>? _providerData;
+  bool _isMessagingLoading = false;
 
   @override
   void initState() {
@@ -129,6 +133,70 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     }
   }
 
+  Future<void> _startConversation() async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final messagingService = Provider.of<MessagingService>(context, listen: false);
+    
+    if (authService.currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to start a conversation')),
+      );
+      return;
+    }
+
+    if (!authService.hasRole('food_consumer')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Only food consumers can message providers')),
+      );
+      return;
+    }
+
+    setState(() => _isMessagingLoading = true);
+
+    try {
+      // Create or get existing conversation
+      final conversationId = await messagingService.createOrGetConversation(
+        otherUserId: widget.listingData['provider_id'],
+        listingId: widget.listingId,
+      );
+
+      // Get provider info
+      final providerInfo = await messagingService.getUserInfo(widget.listingData['provider_id']);
+      
+      if (providerInfo != null) {
+        // Send system message about the listing
+        await messagingService.sendSystemMessage(
+          conversationId: conversationId,
+          content: 'Conversation started about: ${widget.listingData['title']}',
+          listingId: widget.listingId,
+        );
+
+        if (mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => ChatScreen(
+                conversationId: conversationId,
+                otherUser: providerInfo,
+                listingId: widget.listingId,
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error starting conversation: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isMessagingLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final expiryRaw = widget.listingData['expiry_datetime'];
@@ -140,7 +208,26 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       appBar: AppBar(
         title: Text(widget.listingData['title'] ?? 'Listing Details'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        actions: [],
+        actions: [
+          Consumer<AuthService>(
+            builder: (context, authService, child) {
+              if (authService.hasRole('food_consumer')) {
+                return IconButton(
+                  onPressed: _isMessagingLoading ? null : _startConversation,
+                  icon: _isMessagingLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.message),
+                  tooltip: 'Message Provider',
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -334,6 +421,29 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                                   Text(_providerData!['address'] ?? ''),
                                 ],
                               ),
+                            ),
+                            Consumer<AuthService>(
+                              builder: (context, authService, child) {
+                                if (authService.hasRole('food_consumer')) {
+                                  return ElevatedButton.icon(
+                                    onPressed: _isMessagingLoading ? null : _startConversation,
+                                    icon: _isMessagingLoading
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          )
+                                        : const Icon(Icons.message, size: 16),
+                                    label: Text(_isMessagingLoading ? 'Starting...' : 'Message'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green.shade600,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    ),
+                                  );
+                                }
+                                return const SizedBox.shrink();
+                              },
                             ),
                           ],
                         ),

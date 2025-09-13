@@ -181,6 +181,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         'checkout_date': FieldValue.serverTimestamp(),
       });
 
+      // Create notification for providers
+      await _createOrderNotifications(widget.cartId, widget.items);
+
       // Update listing quantities
       for (final item in widget.items) {
         final listingId = item['listing_id'];
@@ -479,6 +482,44 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _createOrderNotifications(String cartId, List<Map<String, dynamic>> items) async {
+    try {
+      // Get unique provider IDs from items
+      final Set<String> providerIds = {};
+      
+      for (final item in items) {
+        final listingId = item['listing_id'] as String?;
+        if (listingId != null) {
+          final listingDoc = await FirebaseFirestore.instance
+              .collection('listings')
+              .doc(listingId)
+              .get();
+          
+          if (listingDoc.exists) {
+            final providerId = listingDoc.data()?['provider_id'] as String?;
+            if (providerId != null) {
+              providerIds.add(providerId);
+            }
+          }
+        }
+      }
+
+      // Create notifications for each provider
+      for (final providerId in providerIds) {
+        await FirebaseFirestore.instance.collection('notifications').add({
+          'provider_id': providerId,
+          'type': 'new_order',
+          'cart_id': cartId,
+          'created_at': FieldValue.serverTimestamp(),
+          'read': false,
+          'message': 'You have a new order! Customer has placed an order and is ready for pickup.',
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to create order notifications: $e');
+    }
   }
 }
 

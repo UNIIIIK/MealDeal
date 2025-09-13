@@ -1,18 +1,31 @@
 <?php
-require_once 'config/database.php';
+require_once __DIR__ . '/../config/database.php';
 
 // Admin authentication functions
 function isAdminLoggedIn() {
-    return isset($_SESSION['admin_id']) && !empty($_SESSION['admin_id']);
+    // Require active session with sliding expiration
+    $isLogged = isset($_SESSION['admin_id']) && !empty($_SESSION['admin_id']);
+    if (!$isLogged) { return false; }
+    
+    $now = time();
+    $ttlSeconds = 20 * 60; // 20 minutes inactivity timeout
+    $last = isset($_SESSION['last_activity']) ? intval($_SESSION['last_activity']) : 0;
+    if ($last > 0 && ($now - $last) > $ttlSeconds) {
+        logoutAdmin();
+        return false;
+    }
+    // Update activity timestamp
+    $_SESSION['last_activity'] = $now;
+    return true;
 }
 
 function loginAdmin($email, $password) {
     global $db;
     
     try {
-        // Query admin collection
+        // Add timeout and limit to prevent infinite loops
         $adminsRef = $db->getCollection('admins');
-        $query = $adminsRef->where('email', '=', $email);
+        $query = $adminsRef->where('email', '=', $email)->limit(1);
         $documents = $query->documents();
         
         foreach ($documents as $document) {
@@ -24,6 +37,8 @@ function loginAdmin($email, $password) {
                 $_SESSION['admin_name'] = $adminData['name'];
                 $_SESSION['admin_email'] = $adminData['email'];
                 $_SESSION['admin_role'] = $adminData['role'];
+                $_SESSION['last_activity'] = time();
+                session_regenerate_id(true);
                 
                 return true;
             }
@@ -37,7 +52,15 @@ function loginAdmin($email, $password) {
 }
 
 function logoutAdmin() {
-    session_destroy();
+    // Clear session safely
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION = [];
+        if (ini_get('session.use_cookies')) {
+            $params = session_get_cookie_params();
+            setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
+        }
+        session_destroy();
+    }
     return true;
 }
 

@@ -4,15 +4,22 @@ require_once 'config/database.php';
 require_once 'includes/auth.php';
 require_once 'includes/data_functions.php';
 
-// Check if admin is logged in
+// If not logged in, send to login page
 if (!isAdminLoggedIn()) {
     header('Location: login.php');
     exit();
 }
 
-// Get comprehensive dashboard statistics
-$comprehensiveStats = getComprehensiveDashboardStats();
-$stats = $comprehensiveStats['orders']; // For backward compatibility
+// Defer expensive dashboard queries to the client via API to prevent timeouts
+$comprehensiveStats = [
+    'users' => ['total_users' => 0, 'providers' => 0, 'consumers' => 0, 'verified_users' => 0, 'recent_signups' => 0],
+    'listings' => ['active_listings' => 0, 'total_revenue' => 0],
+    'reports' => ['pending_reports' => 0, 'total_reports' => 0, 'recent_reports' => []],
+    'orders' => ['total_food_saved' => 0, 'total_savings' => 0, 'total_orders' => 0, 'completed_orders' => 0, 'average_order_value' => 0],
+    'top_providers' => []
+];
+$stats = $comprehensiveStats['orders'];
+$stats['pending_reports'] = $comprehensiveStats['reports']['pending_reports'];
 ?>
 
 <!DOCTYPE html>

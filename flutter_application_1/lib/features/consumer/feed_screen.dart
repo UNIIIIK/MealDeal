@@ -28,7 +28,6 @@ class _FeedScreenState extends State<FeedScreen> {
     'fruits',
     'vegetables',
     'meat',
-    'prepared',
     'beverages',
     'snacks',
     'frozen',
@@ -64,62 +63,96 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final authServiceTop = Provider.of<AuthService>(context);
-    return Scaffold(
-      floatingActionButton: Consumer<AuthService>(
-        builder: (context, authService, child) {
-          if (authService.hasRole('food_provider')) {
-            return FloatingActionButton(
-              onPressed: () {
-                // Navigate to create listing
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const CreateListingScreen(),
-                  ),
-                );
-              },
-              backgroundColor: Colors.orange.shade600,
-              foregroundColor: Colors.white,
-              child: const Icon(Icons.add),
-            );
-          }
-          return const SizedBox.shrink();
-        },
-      ),
-      appBar: authServiceTop.hasRole('food_provider') ? AppBar(
+  PreferredSizeWidget _buildAppBar(AuthService authService) {
+    debugPrint('*** BUILDING APP BAR - hasRole(food_provider): ${authService.hasRole('food_provider')} ***');
+    
+    if (authService.hasRole('food_provider')) {
+      debugPrint('*** USING PROVIDER APP BAR ***');
+      return AppBar(
         backgroundColor: Colors.green.shade600,
         elevation: 0,
         title: const Text('Home', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         actions: [
           Consumer<AuthService>(
             builder: (context, authService, child) {
-              return IconButton(
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.notifications,
-                    color: Colors.white,
-                    size: 24,
-                  ),
+              debugPrint('*** APP BAR CONSUMER BUILDER CALLED ***');
+              debugPrint('*** ENTERING FOOD PROVIDER SECTION ***');
+              debugPrint('User role detected: ${authService.currentUser?.uid} is a food_provider');
+              debugPrint('Rendering notification bell for provider');
+              
+              return Container(
+                margin: const EdgeInsets.only(right: 16),
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('notifications')
+                      .where('provider_id', isEqualTo: authService.currentUser!.uid)
+                      .where('read', isEqualTo: false)
+                      .snapshots(),
+                  builder: (context, snap) {
+                    debugPrint('StreamBuilder builder called - ConnectionState: ${snap.connectionState}');
+                    final unread = snap.data?.docs.length ?? 0;
+                    debugPrint('Provider ${authService.currentUser!.uid} has $unread unread notifications');
+                    
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            Icons.notifications, 
+                            color: unread > 0 ? Colors.yellow : Colors.white,
+                            size: 28,
+                          ),
+                          onPressed: () async {
+                            debugPrint('*** NOTIFICATION BELL CLICKED ***');
+                            if (context.mounted) {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => NotificationsScreen(providerId: authService.currentUser!.uid),
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                        if (unread > 0)
+                          Positioned(
+                            right: 2,
+                            top: 2,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.white, width: 2),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.3),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Text(
+                                '$unread',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
                 ),
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => NotificationsScreen(providerId: authService.currentUser!.uid),
-                    ),
-                  );
-                },
               );
             },
           ),
         ],
-      ) : AppBar(
+      );
+    } else {
+      debugPrint('*** USING CONSUMER APP BAR ***');
+      return AppBar(
         backgroundColor: Colors.green.shade600,
         elevation: 0,
         title: const Text(
@@ -162,52 +195,42 @@ class _FeedScreenState extends State<FeedScreen> {
                     },
                   ),
                 );
-              } else if (authService.hasRole('food_provider')) {
-                // Notifications bell for provider
-                return Container(
-                  margin: const EdgeInsets.only(right: 16),
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('notifications')
-                        .where('provider_id', isEqualTo: authService.currentUser!.uid)
-                        .where('read', isEqualTo: false)
-                        .snapshots(),
-                    builder: (context, snap) {
-                      final unread = snap.data?.docs.length ?? 0;
-                      return Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.notifications, color: Colors.white),
-                            onPressed: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => NotificationsScreen(providerId: authService.currentUser!.uid),
-                                ),
-                              );
-                            },
-                          ),
-                          if (unread > 0)
-                            Positioned(
-                              right: 4,
-                              top: 4,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.rectangle, borderRadius: BorderRadius.all(Radius.circular(10))),
-                                child: Text('$unread', style: const TextStyle(color: Colors.white, fontSize: 10)),
-                              ),
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-                );
               }
               return const SizedBox.shrink();
             },
           ),
         ],
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    debugPrint('*** FEED SCREEN BUILD METHOD CALLED ***');
+    final authServiceTop = Provider.of<AuthService>(context);
+    debugPrint('*** APP BAR SELECTION - hasRole(food_provider): ${authServiceTop.hasRole('food_provider')} ***');
+    return Scaffold(
+      floatingActionButton: Consumer<AuthService>(
+        builder: (context, authService, child) {
+          if (authService.hasRole('food_provider')) {
+            return FloatingActionButton(
+              onPressed: () {
+                // Navigate to create listing
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const CreateListingScreen(),
+                  ),
+                );
+              },
+              backgroundColor: Colors.orange.shade600,
+              foregroundColor: Colors.white,
+              child: const Icon(Icons.add),
+            );
+          }
+          return const SizedBox.shrink();
+        },
       ),
+      appBar: _buildAppBar(authServiceTop),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -1232,6 +1255,9 @@ class _FeedScreenState extends State<FeedScreen> {
         'total_price': FieldValue.increment(data['discounted_price'] ?? 0.0),
       });
 
+      // Create notification for provider about new pending order
+      await _createPendingOrderNotification(cartRef.id, listingId, data);
+
       if (!mounted) return;
       
       // Navigate directly to checkout screen
@@ -1267,6 +1293,32 @@ class _FeedScreenState extends State<FeedScreen> {
           backgroundColor: Colors.red,
         ),
       );
+    }
+  }
+
+  Future<void> _createPendingOrderNotification(String cartId, String listingId, Map<String, dynamic> data) async {
+    try {
+      // Get provider ID from listing
+      final listingDoc = await FirebaseFirestore.instance
+          .collection('listings')
+          .doc(listingId)
+          .get();
+      
+      if (listingDoc.exists) {
+        final providerId = listingDoc.data()?['provider_id'] as String?;
+        if (providerId != null) {
+          await FirebaseFirestore.instance.collection('notifications').add({
+            'provider_id': providerId,
+            'type': 'pending_order',
+            'cart_id': cartId,
+            'created_at': FieldValue.serverTimestamp(),
+            'read': false,
+            'message': 'New pending order: ${data['title']} has been added to cart.',
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to create pending order notification: $e');
     }
   }
 }

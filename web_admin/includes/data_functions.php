@@ -1,5 +1,5 @@
 <?php
-require_once 'config/database.php';
+require_once __DIR__ . '/../config/database.php';
 
 // Enhanced data fetching functions for real Firestore data
 
@@ -11,7 +11,7 @@ function getUserStats() {
     
     try {
         $usersRef = $db->getCollection('users');
-        $users = $usersRef->documents();
+        $users = $usersRef->limit(500)->documents();
         
         $stats = [
             'total_users' => 0,
@@ -74,7 +74,7 @@ function getListingStats() {
     
     try {
         $listingsRef = $db->getCollection('listings');
-        $listings = $listingsRef->documents();
+        $listings = $listingsRef->limit(500)->documents();
         
         $stats = [
             'total_listings' => 0,
@@ -149,7 +149,7 @@ function getOrderStats() {
     
     try {
         $cartsRef = $db->getCollection('cart');
-        $carts = $cartsRef->documents();
+        $carts = $cartsRef->limit(500)->documents();
         
         $stats = [
             'total_orders' => 0,
@@ -189,10 +189,39 @@ function getOrderStats() {
             // Calculate food saved from items
             if (isset($cartData['items']) && is_array($cartData['items'])) {
                 foreach ($cartData['items'] as $item) {
-                    if (isset($item['quantity']) && isset($item['weight_per_unit'])) {
-                        $quantity = intval($item['quantity']);
-                        $weight = floatval($item['weight_per_unit']);
-                        $stats['total_food_saved'] += ($quantity * $weight);
+                    $quantity = isset($item['quantity']) ? intval($item['quantity']) : 0;
+
+                    // Primary source: item-provided weight in kilograms
+                    if (isset($item['weight_per_unit'])) {
+                        $weightKg = floatval($item['weight_per_unit']);
+                        $stats['total_food_saved'] += ($quantity * $weightKg);
+                        continue;
+                    }
+
+                    // Fallback: look up the listing's weight field(s)
+                    try {
+                        if (isset($item['listing_id'])) {
+                            $listingDoc = $db->getDocument('listings', $item['listing_id'])->snapshot();
+                            if ($listingDoc->exists()) {
+                                $listingData = $listingDoc->data();
+                                $weightKg = 0;
+                                if (isset($listingData['weight_per_unit'])) {
+                                    $weightKg = floatval($listingData['weight_per_unit']);
+                                } elseif (isset($listingData['unit_weight_kg'])) {
+                                    $weightKg = floatval($listingData['unit_weight_kg']);
+                                } elseif (isset($listingData['weight'])) {
+                                    // Assume "weight" is already in kg
+                                    $weightKg = floatval($listingData['weight']);
+                                }
+
+                                if ($weightKg > 0 && $quantity > 0) {
+                                    $stats['total_food_saved'] += ($quantity * $weightKg);
+                                }
+                            }
+                        }
+                    } catch (Exception $lookupEx) {
+                        // Best-effort only; do not fail stats on lookup issues
+                        error_log('OrderStats listing lookup failed: ' . $lookupEx->getMessage());
                     }
                 }
             }
@@ -224,7 +253,7 @@ function getReportStats() {
     
     try {
         $reportsRef = $db->getCollection('reports');
-        $reports = $reportsRef->documents();
+        $reports = $reportsRef->limit(500)->documents();
         
         $stats = [
             'total_reports' => 0,
@@ -306,7 +335,7 @@ function getTopProviders($limit = 10) {
     
     try {
         $usersRef = $db->getCollection('users');
-        $providers = $usersRef->where('role', '=', 'food_provider')->documents();
+        $providers = $usersRef->where('role', '=', 'food_provider')->limit(300)->documents();
         
         $providerStats = [];
         
@@ -316,7 +345,7 @@ function getTopProviders($limit = 10) {
             
             // Get provider's listings
             $listingsRef = $db->getCollection('listings');
-            $providerListings = $listingsRef->where('provider_id', '=', $providerId)->documents();
+            $providerListings = $listingsRef->where('provider_id', '=', $providerId)->limit(500)->documents();
             
             $stats = [
                 'id' => $providerId,
@@ -372,7 +401,7 @@ function getTopConsumers($limit = 10) {
     
     try {
         $usersRef = $db->getCollection('users');
-        $consumers = $usersRef->where('role', '=', 'food_consumer')->documents();
+        $consumers = $usersRef->where('role', '=', 'food_consumer')->limit(300)->documents();
         
         $consumerStats = [];
         
@@ -382,7 +411,7 @@ function getTopConsumers($limit = 10) {
             
             // Get consumer's orders
             $cartsRef = $db->getCollection('cart');
-            $consumerOrders = $cartsRef->where('consumer_id', '=', $consumerId)->documents();
+            $consumerOrders = $cartsRef->where('consumer_id', '=', $consumerId)->limit(500)->documents();
             
             $stats = [
                 'id' => $consumerId,

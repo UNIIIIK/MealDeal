@@ -42,7 +42,6 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     'Dairy Products',
     'Fruits & Vegetables',
     'Meat & Seafood',
-    'Prepared Foods',
     'Beverages',
     'Snacks & Confectionery',
     'Frozen Foods',

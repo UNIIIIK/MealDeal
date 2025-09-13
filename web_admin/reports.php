@@ -2,6 +2,7 @@
 session_start();
 require_once 'config/database.php';
 require_once 'includes/auth.php';
+require_once 'includes/data_functions.php';
 
 // Check if admin is logged in
 if (!isAdminLoggedIn()) {
@@ -293,6 +294,28 @@ $totalPages = getTotalReportPages($status);
         </div>
     </div>
 
+    <!-- Report Details Modal -->
+    <div class="modal fade" id="reportDetailsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Report Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="reportDetailsContent">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="assets/js/reports.js"></script>
 </body>
@@ -306,28 +329,90 @@ function getReports($page = 1, $status = 'all', $limit = 20) {
     try {
         $reportsRef = $db->getCollection('reports');
         
+        // Apply status filter
         if ($status !== 'all') {
-            $reports = $reportsRef->where('status', '=', $status)->orderBy('created_at', 'desc')->documents();
+            // Avoid composite index requirement by skipping orderBy when filtering
+            $query = $reportsRef->where('status', '=', $status);
+            $snap = $query->documents();
         } else {
-            $reports = $reportsRef->orderBy('created_at', 'desc')->documents();
+            // For all, order by created_at desc is fine
+            $snap = $reportsRef->orderBy('created_at', 'desc')->documents();
         }
         
         $allReports = [];
-        foreach ($reports as $report) {
+        foreach ($snap as $report) {
             $reportData = $report->data();
+
+            // Resolve names if not denormalized
+            $reporterName = $reportData['reporter_name'] ?? ($reportData['reporter_email'] ?? null);
+            $targetName = $reportData['target_name'] ?? ($reportData['listing_title'] ?? ($reportData['provider_name'] ?? null));
+
+            try {
+                if (!$reporterName && isset($reportData['reporter_id'])) {
+                    $uSnap = $db->getDocument('users', $reportData['reporter_id'])->snapshot();
+                    if ($uSnap->exists()) {
+                        $uData = $uSnap->data();
+                        $reporterName = $uData['name'] ?? ($uData['email'] ?? 'Anonymous');
+                    }
+                }
+                if (!$targetName && isset($reportData['target_user_id'])) {
+                    $tSnap = $db->getDocument('users', $reportData['target_user_id'])->snapshot();
+                    if ($tSnap->exists()) {
+                        $tData = $tSnap->data();
+                        $targetName = $tData['name'] ?? ($tData['email'] ?? '—');
+                    }
+                }
+                // If this report targets a listing, use listing title/provider
+                if (!$targetName && isset($reportData['target_listing_id'])) {
+                    $lSnap = $db->getDocument('listings', $reportData['target_listing_id'])->snapshot();
+                    if ($lSnap->exists()) {
+                        $lData = $lSnap->data();
+                        $targetName = $lData['title'] ?? ($lData['name'] ?? 'Listing');
+                        // Optional: append provider name if available
+                        if (isset($lData['provider_id'])) {
+                            $pSnap = $db->getDocument('users', $lData['provider_id'])->snapshot();
+                            if ($pSnap->exists()) {
+                                $pData = $pSnap->data();
+                                $providerName = $pData['name'] ?? ($pData['email'] ?? null);
+                                if ($providerName) {
+                                    $targetName .= ' • ' . $providerName;
+                                }
+                            }
+                        }
+                    }
+                }
+                // Alternate schema: provider_id present directly on report
+                if (!$targetName && isset($reportData['provider_id'])) {
+                    $pSnap = $db->getDocument('users', $reportData['provider_id'])->snapshot();
+                    if ($pSnap->exists()) {
+                        $pData = $pSnap->data();
+                        $targetName = ($reportData['listing_title'] ?? 'Listing') . ' • ' . ($pData['name'] ?? ($pData['email'] ?? 'Provider'));
+                    }
+                }
+            } catch (Exception $e) {
+                error_log('Report name resolution failed: ' . $e->getMessage());
+            }
+
             $allReports[] = [
                 'id' => $report->id(),
-                'type' => $reportData['type'],
-                'status' => $reportData['status'],
-                'reporter_name' => $reportData['reporter_name'],
-                'target_name' => $reportData['target_name'],
-                'description' => $reportData['description'],
-                'created_at' => $reportData['created_at']
+                'type' => $reportData['type'] ?? 'other',
+                'status' => $reportData['status'] ?? 'pending',
+                'reporter_name' => $reporterName ?? '—',
+                'target_name' => $targetName ?? '—',
+                'description' => $reportData['description'] ?? '',
+                'created_at' => $reportData['created_at'] ?? null
             ];
         }
-        
-        // Simple pagination
-        $offset = ($page - 1) * $limit;
+
+        // Sort by created_at desc in-memory if not already sorted
+        usort($allReports, function($a, $b) {
+            $at = is_array($a['created_at']) ? ($a['created_at']['seconds'] ?? 0) : (is_numeric($a['created_at']) ? $a['created_at'] : 0);
+            $bt = is_array($b['created_at']) ? ($b['created_at']['seconds'] ?? 0) : (is_numeric($b['created_at']) ? $b['created_at'] : 0);
+            return $bt <=> $at;
+        });
+
+        // Simple pagination with server-safe cap
+        $offset = max(0, ($page - 1) * $limit);
         return array_slice($allReports, $offset, $limit);
     } catch (Exception $e) {
         error_log("Error getting reports: " . $e->getMessage());
@@ -341,14 +426,10 @@ function getTotalReportPages($status = 'all', $limit = 20) {
     try {
         $reportsRef = $db->getCollection('reports');
         
-        if ($status !== 'all') {
-            $reports = $reportsRef->where('status', '=', $status)->documents();
-        } else {
-            $reports = $reportsRef->documents();
-        }
-        
-        $total = iterator_count($reports);
-        return ceil($total / $limit);
+        // Counting all documents is expensive and can trigger long gRPC backoffs.
+        // To keep the UI responsive, skip counting and assume a single page until
+        // a proper cursor-based pagination is added.
+        return 1;
     } catch (Exception $e) {
         error_log("Error getting total pages: " . $e->getMessage());
         return 1;

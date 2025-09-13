@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../auth/auth_service.dart';
-import 'location_management_screen.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
@@ -30,24 +29,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             .collection('cart')
             .where('status', whereIn: ['awaiting_pickup','claimed','checked_out'])
             .orderBy('checkout_date', descending: true)
-        .limit(30);
+            .limit(100);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Analytics'),
-        actions: [
-          IconButton(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const LocationManagementScreen(),
-                ),
-              );
-            },
-            icon: const Icon(Icons.location_on),
-            tooltip: 'Manage Business Location',
-          ),
-        ],
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: query.snapshots(),
@@ -75,8 +61,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     if (item is Map<String, dynamic>) {
                       final listingId = item['listing_id'] as String?;
                       if (listingId != null) {
-                                                 // Get the listing to check if it belongs to this provider
-                         // For now, we'll show all checked out orders and filter by provider later
+                        // For now, we'll process all items and assume they belong to this provider
+                        // In a production app, you'd want to verify the provider_id
                          final ts = cartData['checkout_date'] as Timestamp?;
                         if (ts != null) {
               final day = DateTime(ts.toDate().year, ts.toDate().month, ts.toDate().day).toIso8601String();
@@ -202,21 +188,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Icon(Icons.analytics, color: Colors.blue.shade700, size: 24),
-                          const SizedBox(width: 8),
                           Text(
-                            'Analytics Dashboard',
+                            'Analytics Overview',
                             style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
-                              color: Colors.blue.shade700,
+                              color: Colors.grey.shade800,
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
+                          const SizedBox(height: 16),
                       Row(
                         children: [
                           Expanded(
@@ -303,21 +283,73 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     ),
                     child: LineChart(
                       LineChartData(
-                        gridData: FlGridData(show: true, horizontalInterval: maxVal > 0 ? maxVal / 4 : 1),
+                            gridData: FlGridData(
+                              show: true, 
+                              horizontalInterval: maxVal > 0 ? maxVal / 5 : 1,
+                              verticalInterval: 1,
+                            ),
                         titlesData: FlTitlesData(
-                          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40)),
-                          bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true)),
+                              leftTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true, 
+                                  reservedSize: 50,
+                                  getTitlesWidget: (value, meta) {
+                                    return Text(
+                                      '₱${value.toInt()}',
+                                      style: const TextStyle(fontSize: 10),
+                                    );
+                                  },
+                                ),
+                              ),
+                              bottomTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  getTitlesWidget: (value, meta) {
+                                    if (value.toInt() < entries.length) {
+                                      final date = DateTime.parse(entries[value.toInt()].key);
+                                      if (_period == 'daily') {
+                                        return Text(
+                                          '${date.day}/${date.month}',
+                                          style: const TextStyle(fontSize: 10),
+                                        );
+                                      } else if (_period == 'monthly') {
+                                        return Text(
+                                          '${date.month}/${date.year}',
+                                          style: const TextStyle(fontSize: 10),
+                                        );
+                                      } else {
+                                        return Text(
+                                          '${date.year}',
+                                          style: const TextStyle(fontSize: 10),
+                                        );
+                                      }
+                                    }
+                                    return const Text('');
+                                  },
+                                ),
+                              ),
                           rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                           topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                         ),
                         borderData: FlBorderData(show: true),
                         minY: 0,
+                            maxY: maxVal > 0 ? maxVal * 1.1 : 100,
                         lineBarsData: [
                           LineChartBarData(
                             isCurved: true,
                             color: Colors.green.shade600,
                             barWidth: 3,
-                            dotData: const FlDotData(show: false),
+                                dotData: FlDotData(
+                                  show: true,
+                                  getDotPainter: (spot, percent, barData, index) {
+                                    return FlDotCirclePainter(
+                                      radius: 4,
+                                      color: Colors.green.shade600,
+                                      strokeWidth: 2,
+                                      strokeColor: Colors.white,
+                                    );
+                                  },
+                                ),
                             spots: [
                               for (int i = 0; i < entries.length; i++)
                                 FlSpot(i.toDouble(), entries[i].value),
@@ -345,10 +377,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -359,8 +391,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         children: [
           Row(
             children: [
-              Icon(icon, color: color, size: 16),
-              const SizedBox(width: 4),
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 8),
               Text(
                 title,
                 style: TextStyle(
@@ -371,11 +403,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           Text(
             value,
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 18,
               fontWeight: FontWeight.bold,
               color: color,
             ),
@@ -385,5 +417,3 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 }
-
-

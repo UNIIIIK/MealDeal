@@ -17,11 +17,37 @@ class _CartScreenState extends State<CartScreen> {
   Future<void> _updateItemQuantity(String cartId, List items, int index, int newQuantity) async {
     try {
       final updatedItems = List.from(items);
+      final item = updatedItems[index];
       
       if (newQuantity <= 0) {
         // Remove item
         updatedItems.removeAt(index);
       } else {
+        // Check available quantity from the listing
+        final listingId = item['listing_id'];
+        if (listingId != null) {
+          final listingDoc = await FirebaseFirestore.instance
+              .collection('listings')
+              .doc(listingId)
+              .get();
+          
+          if (listingDoc.exists) {
+            final listingData = listingDoc.data()!;
+            final availableQuantity = listingData['quantity'] ?? 0;
+            
+            if (newQuantity > availableQuantity) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Only $availableQuantity items available in stock'),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+              return;
+            }
+          }
+        }
+        
         updatedItems[index]['quantity'] = newQuantity;
       }
 
@@ -47,6 +73,26 @@ class _CartScreenState extends State<CartScreen> {
         ),
       );
     }
+  }
+
+  Future<int> _getAvailableQuantity(String? listingId) async {
+    if (listingId == null) return 0;
+    
+    try {
+      final listingDoc = await FirebaseFirestore.instance
+          .collection('listings')
+          .doc(listingId)
+          .get();
+      
+      if (listingDoc.exists) {
+        final listingData = listingDoc.data()!;
+        return listingData['quantity'] ?? 0;
+      }
+    } catch (e) {
+      debugPrint('Error getting available quantity: $e');
+    }
+    
+    return 0;
   }
 
   Future<void> _checkout(String cartId, List items, double totalPrice) async {
@@ -345,16 +391,28 @@ class _CartScreenState extends State<CartScreen> {
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
-                      IconButton(
-                        onPressed: () => _updateItemQuantity(
-                          cartId, 
-                          items, 
-                          index, 
-                          (item['quantity'] ?? 1) + 1
-                        ),
-                        icon: const Icon(Icons.add_circle_outline),
-                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                        padding: EdgeInsets.zero,
+                      FutureBuilder<int>(
+                        future: _getAvailableQuantity(item['listing_id']),
+                        builder: (context, snapshot) {
+                          final availableQuantity = snapshot.data ?? 0;
+                          final currentQuantity = item['quantity'] ?? 1;
+                          final canAddMore = currentQuantity < availableQuantity;
+                          
+                          return IconButton(
+                            onPressed: canAddMore ? () => _updateItemQuantity(
+                              cartId, 
+                              items, 
+                              index, 
+                              currentQuantity + 1
+                            ) : null,
+                            icon: Icon(
+                              Icons.add_circle_outline,
+                              color: canAddMore ? null : Colors.grey.shade400,
+                            ),
+                            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                            padding: EdgeInsets.zero,
+                          );
+                        },
                       ),
                       const Spacer(),
                       

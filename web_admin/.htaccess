@@ -1,0 +1,7 @@
+RewriteEngine On
+
+# If the request is exactly the web admin root, force login.php
+RewriteCond %{REQUEST_URI} ^/$
+RewriteRule ^ login.php [L,R=302]
+
+

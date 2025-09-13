@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'firebase_options.dart';
 import 'features/auth/auth_service.dart';
+import 'services/messaging_service.dart';
 import 'features/welcome/welcome_screen.dart';
 import 'features/consumer/feed_screen.dart';
 import 'features/consumer/edit_profile_screen.dart';
@@ -14,6 +15,8 @@ import 'features/provider/my_listings_screen.dart';
 import 'features/provider/location_management_screen.dart';
 import 'features/consumer/my_claims_screen.dart';
 import 'features/consumer/my_orders_screen.dart';
+import 'features/provider/orders_management_screen.dart';
+import 'features/messaging/chat_list_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,6 +38,7 @@ class MealDealApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthService()),
+        ChangeNotifierProvider(create: (_) => MessagingService()),
       ],
       child: MaterialApp(
         title: 'MealDeal - Food Surplus Redistribution',
@@ -116,11 +120,21 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     if (isProvider) {
       screens = [
         const FeedScreen(), // Home
+        const OrdersManagementScreen(),
+        const ChatListScreen(), // Messages
         const AnalyticsScreen(),
         const ProfileScreen(),
       ];
       navItems = [
         const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.shopping_cart),
+          label: 'Orders',
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.message),
+          label: 'Messages',
+        ),
         const BottomNavigationBarItem(
           icon: Icon(Icons.bar_chart),
           label: 'Analytics',
@@ -131,9 +145,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         ),
       ];
     } else if (isConsumer) {
-      screens = [const FeedScreen(), const ProfileScreen()];
+      screens = [
+        const FeedScreen(), 
+        const ChatListScreen(), // Messages
+        const ProfileScreen()
+      ];
       navItems = [
         const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.message),
+          label: 'Messages',
+        ),
         const BottomNavigationBarItem(
           icon: Icon(Icons.person),
           label: 'Profile',
@@ -346,8 +368,8 @@ class ProfileScreen extends StatelessWidget {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               _PurchaseTile(
-                                icon: Icons.account_balance_wallet_outlined,
-                                label: 'To Pay',
+                                icon: Icons.restaurant_outlined,
+                                label: 'Preparing',
                                 onTap: () {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
@@ -358,7 +380,7 @@ class ProfileScreen extends StatelessWidget {
                               ),
                               _PurchaseTile(
                                 icon: Icons.local_shipping_outlined,
-                                label: 'To Ship',
+                                label: 'Ready for Pickup',
                                 onTap: () {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
@@ -368,23 +390,12 @@ class ProfileScreen extends StatelessWidget {
                                 },
                               ),
                               _PurchaseTile(
-                                icon: Icons.local_mall_outlined,
-                                label: 'To Receive',
+                                icon: Icons.check_circle_outline,
+                                label: 'Picked Up',
                                 onTap: () {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
                                       builder: (context) => const MyOrdersScreen(initialFilter: 'claimed'),
-                                    ),
-                                  );
-                                },
-                              ),
-                              _PurchaseTile(
-                                icon: Icons.star_border,
-                                label: 'To Rate',
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (context) => const MyOrdersScreen(initialFilter: 'checked_out'),
                                     ),
                                   );
                                 },
@@ -482,6 +493,18 @@ class ProfileScreen extends StatelessWidget {
                 ],
                 
                 // Menu options
+                ListTile(
+                  leading: const Icon(Icons.message),
+                  title: const Text('Messages'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const ChatListScreen(),
+                      ),
+                    );
+                  },
+                ),
                 if (authService.hasRole('food_provider'))
                   ListTile(
                     leading: const Icon(Icons.location_on),

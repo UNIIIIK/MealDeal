@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../auth/auth_service.dart';
+import 'pickup_route_screen.dart';
 
 class MyOrdersScreen extends StatefulWidget {
   const MyOrdersScreen({super.key, this.initialFilter});
@@ -69,13 +70,11 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                           children: [
                             _buildFilterChip('all', 'All'),
                             const SizedBox(width: 8),
-                            _buildFilterChip('pending', 'Pending'),
+                            _buildFilterChip('pending', 'Preparing'),
                             const SizedBox(width: 8),
-                            _buildFilterChip('awaiting_pickup', 'Awaiting Pickup'),
+                            _buildFilterChip('awaiting_pickup', 'Ready for Pickup'),
                             const SizedBox(width: 8),
-                            _buildFilterChip('claimed', 'Claimed'),
-                            const SizedBox(width: 8),
-                            _buildFilterChip('checked_out', 'Completed'),
+                            _buildFilterChip('claimed', 'Picked Up'),
                           ],
                         ),
                       ),
@@ -178,7 +177,9 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     final checkoutDate = data['checkout_date'] as Timestamp?;
     final claimedAt = data['claimed_at'] as Timestamp?;
 
-    return Card(
+    final awaitingPickup = status == 'awaiting_pickup';
+
+    final card = Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -281,15 +282,31 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                   ],
                 ),
                 
-                // Rating section (only for completed orders)
+                // Right-side actions
                 if (status == 'checked_out' || status == 'claimed')
                   _buildRatingSection(orderId, data),
+                if (awaitingPickup)
+                  TextButton.icon(
+                    onPressed: () => _openPickupRoute(orderId, data),
+                    icon: const Icon(Icons.route, size: 16),
+                    label: const Text('View Pickup Route'),
+                  ),
               ],
             ),
           ],
         ),
       ),
     );
+
+    if (awaitingPickup) {
+      return InkWell(
+        onTap: () => _openPickupRoute(orderId, data),
+        borderRadius: BorderRadius.circular(12),
+        child: card,
+      );
+    }
+
+    return card;
   }
 
   Widget _buildStatusChip(String status) {
@@ -299,15 +316,15 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     switch (status) {
       case 'pending':
         color = Colors.orange;
-        label = 'Pending';
+        label = 'Preparing';
         break;
       case 'awaiting_pickup':
         color = Colors.blue;
-        label = 'Awaiting Pickup';
+        label = 'Ready for Pickup';
         break;
       case 'claimed':
         color = Colors.green;
-        label = 'Claimed';
+        label = 'Picked Up';
         break;
       case 'checked_out':
         color = Colors.green.shade700;
@@ -417,6 +434,40 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _openPickupRoute(String orderId, Map<String, dynamic> data) async {
+    try {
+      Map<String, dynamic>? providerData;
+      final items = (data['items'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      if (items.isNotEmpty) {
+        final listingId = items.first['listing_id'];
+        if (listingId != null) {
+          final listingDoc = await FirebaseFirestore.instance.collection('listings').doc(listingId).get();
+          final listingData = listingDoc.data();
+          final providerId = listingData?['provider_id'];
+          if (providerId != null) {
+            final providerDoc = await FirebaseFirestore.instance.collection('users').doc(providerId).get();
+            providerData = providerDoc.data();
+          }
+        }
+      }
+
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PickupRouteScreen(
+            cartId: orderId,
+            provider: providerData ?? {'business_name': 'Provider', 'address': 'Bogo City, Cebu'},
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to open pickup route: $e'), backgroundColor: Colors.red),
+      );
+    }
   }
 
   Future<void> _submitRating(String orderId, int rating) async {

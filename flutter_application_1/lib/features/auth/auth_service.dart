@@ -23,11 +23,13 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> _onAuthStateChanged(User? user) async {
+    debugPrint('Auth state changed - User: ${user?.uid}');
     if (user != null) {
       // Reload user to get the latest email verification status
       await user.reload();
       await _loadUserData(user.uid);
     } else {
+      debugPrint('User signed out - clearing role and data');
       _userRole = null;
       _userData = null;
     }
@@ -36,11 +38,14 @@ class AuthService extends ChangeNotifier {
 
   Future<void> _loadUserData(String uid) async {
     try {
+      debugPrint('Loading user data for UID: $uid');
       final doc = await _firestore.collection('users').doc(uid).get();
 
       if (doc.exists) {
         _userData = doc.data();
         _userRole = _userData?['role'];
+        debugPrint('User data loaded: $_userData');
+        debugPrint('User role set to: $_userRole');
         
         // Update local state with verification status
         if (currentUser?.emailVerified == true && _userData?['verified'] != true) {
@@ -316,6 +321,9 @@ class AuthService extends ChangeNotifier {
 
   // Check if user has specific role
   bool hasRole(String role) {
+    debugPrint('hasRole($role) called - Current _userRole: $_userRole');
+    debugPrint('User data: $_userData');
+    debugPrint('Current user ID: ${currentUser?.uid}');
     return _userRole == role;
   }
 

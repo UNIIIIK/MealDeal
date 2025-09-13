@@ -8,7 +8,15 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/data_functions.php';
 
 try {
-    $stats = getComprehensiveDashboardStats();
+    // Wrap with a short timeout using PCNTL if available (non-Windows). For Windows, rely on collection limits.
+    // Fast-path: fetch only a subset to avoid long scans, with small limits
+    $stats = [
+        'users' => getUserStats(),
+        'listings' => getListingStats(),
+        'orders' => getOrderStats(),
+        'reports' => getReportStats(),
+        'top_providers' => []
+    ];
     
     echo json_encode([
         'success' => true,

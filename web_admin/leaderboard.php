@@ -554,9 +554,19 @@ function getTotalSavings($period) {
 }
 
 function formatDate($timestamp) {
-    if (is_array($timestamp)) {
-        $timestamp = $timestamp['seconds'] ?? time();
+    if ($timestamp instanceof \Google\Cloud\Core\Timestamp) {
+        return $timestamp->get()->format('M j, Y');
     }
-    return date('M j, Y', $timestamp);
+    if (is_array($timestamp)) {
+        $seconds = $timestamp['seconds'] ?? null;
+        if ($seconds !== null) {
+            return date('M j, Y', (int)$seconds);
+        }
+        return '—';
+    }
+    if (is_numeric($timestamp)) {
+        return date('M j, Y', (int)$timestamp);
+    }
+    return '—';
 }
 ?>
