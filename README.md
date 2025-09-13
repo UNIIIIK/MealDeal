@@ -374,8 +374,7 @@ flutter build ios --release
 
 - **Documentation**: Check this README and inline code comments
 - **Issues**: Create an issue in the GitHub repository
-- **Email**: Contact the development team
-- **Discord**: Join our community server
+- **Email**: sanchezjamesss02@gmail.com
 
 ## 📄 License
 
