@@ -373,19 +373,18 @@ flutter build ios --release
 ## 📞 Support
 
 - **Documentation**: Check this README and inline code comments
-- **Issues**: Create an issue in the GitHub repository
 - **Email**: sanchezjamesss02@gmail.com
 
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## 🙏 Development Team
 
-- **Flutter Team** for the amazing framework
-- **Firebase Team** for backend services
-- **Bootstrap** for web UI components
-- **Open Source Community** for various packages and libraries
+Project Lead: Heinz Khervie Tobias
+Backend Development: Elizar James Muñez Sanchez
+Frontend Development: Emarie Dosdos Tulod
+System Analyst: Joshua Daligdig Cortes
 
 ## 📊 Project Statistics
 
