@@ -381,10 +381,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Development Team
 
-Project Lead: Heinz Khervie Tobias
-Backend Development: Elizar James Muñez Sanchez
-Frontend Development: Emarie Dosdos Tulod
-System Analyst: Joshua Daligdig Cortes
+•Project Lead: Heinz Khervie Tobias
+•Backend Development: Elizar James Muñez Sanchez
+•Frontend Development: Emarie Dosdos Tulod
+•System Analyst: Joshua Daligdig Cortes
 
 ## 📊 Project Statistics
 
