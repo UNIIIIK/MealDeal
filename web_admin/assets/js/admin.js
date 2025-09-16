@@ -14,8 +14,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Auto-refresh dashboard stats every 30 seconds
     const isDashboard = location.pathname.endsWith('/index.php') || location.pathname === '/' || location.pathname.endsWith('/');
     if (isDashboard) {
+        // Show loading indicator
+        showLoadingIndicator();
+        
         // Kick off an immediate fetch so cards populate quickly
         refreshStats();
+        
         // Then refresh every 30s
         setInterval(refreshStats, 30000);
     }
@@ -56,6 +60,24 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Dashboard Functions
+function showLoadingIndicator() {
+    // Add loading spinners to stat cards
+    const statCards = document.querySelectorAll('.h5.mb-0.font-weight-bold.text-gray-800');
+    statCards.forEach(card => {
+        if (card.textContent === '0' || card.textContent === '0.0') {
+            card.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+        }
+    });
+}
+
+function hideLoadingIndicator() {
+    // Remove loading spinners
+    const loadingElements = document.querySelectorAll('.fa-spinner');
+    loadingElements.forEach(element => {
+        element.parentElement.innerHTML = '0';
+    });
+}
+
 function refreshStats() {
     // Prefer the comprehensive stats endpoint; fall back if unavailable
     fetch('api/get_comprehensive_stats.php')
@@ -63,13 +85,16 @@ function refreshStats() {
         .then(data => {
             if (data.success && data.data) {
                 updateDashboardStatsFromComprehensive(data.data);
+                hideLoadingIndicator();
                 showNotification('Stats refreshed successfully', 'success');
             } else {
+                hideLoadingIndicator();
                 showNotification('Failed to refresh stats', 'error');
             }
         })
         .catch(error => {
             console.error('Error refreshing stats:', error);
+            hideLoadingIndicator();
             showNotification('Error refreshing stats', 'error');
         });
 }

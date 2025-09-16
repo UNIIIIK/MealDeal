@@ -10,8 +10,9 @@ function getUserStats() {
     global $db;
     
     try {
+        // Use a smaller limit to prevent stack overflow
         $usersRef = $db->getCollection('users');
-        $users = $usersRef->limit(500)->documents();
+        $users = $usersRef->limit(100)->documents();
         
         $stats = [
             'total_users' => 0,
@@ -22,10 +23,14 @@ function getUserStats() {
         ];
         
         $oneWeekAgo = new DateTime('-1 week');
+        $userCount = 0;
         
         foreach ($users as $user) {
+            if ($userCount >= 100) break; // Safety limit
+            
             $userData = $user->data();
             $stats['total_users']++;
+            $userCount++;
             
             // Count by role
             if (isset($userData['role'])) {
@@ -36,8 +41,9 @@ function getUserStats() {
                 }
             }
             
-            // Count verified users
-            if (isset($userData['verified']) && $userData['verified'] === true) {
+            // Count verified users - based on debug data, users have email but no explicit verification
+            // For now, consider all users with email as verified
+            if (isset($userData['email']) && !empty($userData['email'])) {
                 $stats['verified_users']++;
             }
             
@@ -74,7 +80,7 @@ function getListingStats() {
     
     try {
         $listingsRef = $db->getCollection('listings');
-        $listings = $listingsRef->limit(500)->documents();
+        $listings = $listingsRef->limit(50)->documents();
         
         $stats = [
             'total_listings' => 0,
@@ -149,7 +155,7 @@ function getOrderStats() {
     
     try {
         $cartsRef = $db->getCollection('cart');
-        $carts = $cartsRef->limit(500)->documents();
+        $carts = $cartsRef->limit(50)->documents();
         
         $stats = [
             'total_orders' => 0,
@@ -167,11 +173,26 @@ function getOrderStats() {
             $cartData = $cart->data();
             $stats['total_orders']++;
             
-            // Count by status
+            // Count by status - from debug data, cart has 'status' field
             if (isset($cartData['status'])) {
-                if ($cartData['status'] === 'completed') {
+                $status = strtolower(trim($cartData['status']));
+                if (in_array($status, ['completed', 'delivered', 'fulfilled', 'done', 'success', 'finished', 'picked_up'])) {
                     $stats['completed_orders']++;
-                } elseif (in_array($cartData['status'], ['pending', 'awaiting_pickup', 'claimed'])) {
+                } elseif (in_array($status, ['pending', 'awaiting_pickup', 'claimed', 'processing', 'in_progress', 'active', 'open', 'available'])) {
+                    $stats['pending_orders']++;
+                } else {
+                    // If status is unknown, check for completion indicators
+                    if (isset($cartData['checkout_date']) || isset($cartData['completed_at']) || isset($cartData['delivery_date'])) {
+                        $stats['completed_orders']++;
+                    } else {
+                        $stats['pending_orders']++;
+                    }
+                }
+            } else {
+                // If no status field, check if there's a checkout_date or completion indicator
+                if (isset($cartData['checkout_date']) || isset($cartData['completed_at']) || isset($cartData['delivery_date'])) {
+                    $stats['completed_orders']++;
+                } else {
                     $stats['pending_orders']++;
                 }
             }
@@ -205,13 +226,17 @@ function getOrderStats() {
                             if ($listingDoc->exists()) {
                                 $listingData = $listingDoc->data();
                                 $weightKg = 0;
+                                
+                                // Check for explicit weight fields first
                                 if (isset($listingData['weight_per_unit'])) {
                                     $weightKg = floatval($listingData['weight_per_unit']);
                                 } elseif (isset($listingData['unit_weight_kg'])) {
                                     $weightKg = floatval($listingData['unit_weight_kg']);
                                 } elseif (isset($listingData['weight'])) {
-                                    // Assume "weight" is already in kg
                                     $weightKg = floatval($listingData['weight']);
+                                } else {
+                                    // Estimate weight based on food type and quantity
+                                    $weightKg = estimateFoodWeight($listingData, $quantity);
                                 }
 
                                 if ($weightKg > 0 && $quantity > 0) {
@@ -253,7 +278,7 @@ function getReportStats() {
     
     try {
         $reportsRef = $db->getCollection('reports');
-        $reports = $reportsRef->limit(500)->documents();
+        $reports = $reportsRef->limit(50)->documents();
         
         $stats = [
             'total_reports' => 0,
@@ -287,21 +312,28 @@ function getReportStats() {
                 $stats['report_types'][$type]++;
             }
             
-            // Get recent reports
+            // Get recent reports - from debug data, reports have 'created_at' field
             if (isset($reportData['created_at'])) {
                 $createdAt = $reportData['created_at'];
+                $createdDate = null;
+                
                 if ($createdAt instanceof Google\Cloud\Core\Timestamp) {
                     $createdDate = $createdAt->get();
-                    if ($createdDate > $oneWeekAgo) {
-                        $stats['recent_reports'][] = [
-                            'id' => $report->id(),
-                            'type' => $reportData['type'] ?? 'Unknown',
-                            'status' => $reportData['status'] ?? 'Unknown',
-                            'reporter_name' => $reportData['reporter_name'] ?? 'Anonymous',
-                            'created_at' => $createdDate->format('Y-m-d H:i:s'),
-                            'description' => $reportData['description'] ?? 'No description'
-                        ];
-                    }
+                } elseif (is_numeric($createdAt)) {
+                    $createdDate = new DateTime('@' . $createdAt);
+                } elseif (is_string($createdAt)) {
+                    $createdDate = new DateTime($createdAt);
+                }
+                
+                if ($createdDate && $createdDate > $oneWeekAgo) {
+                    $stats['recent_reports'][] = [
+                        'id' => $report->id(),
+                        'type' => $reportData['reason'] ?? 'Unknown', // From debug data, reports have 'reason' field
+                        'status' => $reportData['status'] ?? 'Unknown',
+                        'reporter_name' => $reportData['reporter_email'] ?? 'Anonymous', // From debug data, reports have 'reporter_email'
+                        'created_at' => $createdDate->format('Y-m-d H:i:s'),
+                        'description' => $reportData['description'] ?? 'No description'
+                    ];
                 }
             }
         }
@@ -371,22 +403,42 @@ function getTopProviders($limit = 10) {
                     $stats['total_revenue'] += ($price * $quantity);
                 }
                 
-                if (isset($listingData['weight_per_unit']) && isset($listingData['quantity'])) {
-                    $weight = floatval($listingData['weight_per_unit']);
+                // Calculate food saved from quantity
+                if (isset($listingData['quantity'])) {
                     $quantity = intval($listingData['quantity']);
-                    $stats['food_saved'] += ($weight * $quantity);
+                    if ($quantity > 0) {
+                        // Try to get weight from listing first
+                        if (isset($listingData['weight_per_unit'])) {
+                            $weight = floatval($listingData['weight_per_unit']);
+                        } else {
+                            // Estimate weight based on food type
+                            $weight = estimateFoodWeight($listingData, $quantity);
+                        }
+                        $stats['food_saved'] += ($weight * $quantity);
+                    }
                 }
             }
             
             $providerStats[] = $stats;
         }
         
-        // Sort by total revenue
+        // Sort by total revenue (descending)
         usort($providerStats, function($a, $b) {
-            return $b['total_revenue'] - $a['total_revenue'];
+            return $b['total_revenue'] <=> $a['total_revenue'];
         });
         
-        return array_slice($providerStats, 0, $limit);
+        // Return top providers, but ensure we have at least some data
+        $topProviders = array_slice($providerStats, 0, $limit);
+        
+        // If no providers with revenue, sort by food saved instead
+        if (empty($topProviders) || $topProviders[0]['total_revenue'] == 0) {
+            usort($providerStats, function($a, $b) {
+                return $b['food_saved'] <=> $a['food_saved'];
+            });
+            $topProviders = array_slice($providerStats, 0, $limit);
+        }
+        
+        return $topProviders;
     } catch (Exception $e) {
         error_log("Error getting top providers: " . $e->getMessage());
         return [];
@@ -451,6 +503,63 @@ function getTopConsumers($limit = 10) {
         error_log("Error getting top consumers: " . $e->getMessage());
         return [];
     }
+}
+
+/**
+ * Estimate food weight based on listing data
+ */
+function estimateFoodWeight($listingData, $quantity) {
+    // Default weight estimation based on food type
+    $defaultWeightPerUnit = 0.5; // 500g per unit as default
+    
+    // Get food type from listing
+    $type = $listingData['type'] ?? 'other';
+    $name = strtolower($listingData['name'] ?? '');
+    
+    // Estimate based on food type
+    switch ($type) {
+        case 'main_dish':
+            $defaultWeightPerUnit = 0.8; // 800g for main dishes
+            break;
+        case 'side_dish':
+            $defaultWeightPerUnit = 0.3; // 300g for side dishes
+            break;
+        case 'dessert':
+            $defaultWeightPerUnit = 0.2; // 200g for desserts
+            break;
+        case 'beverage':
+            $defaultWeightPerUnit = 0.5; // 500ml for beverages (treating as weight)
+            break;
+        case 'snack':
+            $defaultWeightPerUnit = 0.1; // 100g for snacks
+            break;
+        case 'pickup':
+            // For pickup items, estimate based on name
+            if (strpos($name, 'ensaymada') !== false || strpos($name, 'bread') !== false || strpos($name, 'pastry') !== false) {
+                $defaultWeightPerUnit = 0.15; // ~150g per piece
+            } elseif (strpos($name, 'rice') !== false || strpos($name, 'meal') !== false) {
+                $defaultWeightPerUnit = 0.6; // ~600g per serving
+            } else {
+                $defaultWeightPerUnit = 0.3; // Default for pickup items
+            }
+            break;
+        default:
+            // Try to estimate based on name keywords
+            if (strpos($name, 'soup') !== false || strpos($name, 'stew') !== false) {
+                $defaultWeightPerUnit = 0.6;
+            } elseif (strpos($name, 'salad') !== false) {
+                $defaultWeightPerUnit = 0.4;
+            } elseif (strpos($name, 'pizza') !== false || strpos($name, 'burger') !== false) {
+                $defaultWeightPerUnit = 0.7;
+            } elseif (strpos($name, 'cake') !== false || strpos($name, 'pie') !== false) {
+                $defaultWeightPerUnit = 0.3;
+            } elseif (strpos($name, 'ensaymada') !== false || strpos($name, 'bread') !== false) {
+                $defaultWeightPerUnit = 0.15;
+            }
+            break;
+    }
+    
+    return $defaultWeightPerUnit;
 }
 
 /**

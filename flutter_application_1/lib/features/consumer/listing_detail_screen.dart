@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../auth/auth_service.dart';
 import '../../services/messaging_service.dart';
-import '../../models/message.dart';
 import '../messaging/chat_screen.dart';
 
 class ListingDetailScreen extends StatefulWidget {

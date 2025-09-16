@@ -6,6 +6,28 @@ header('Access-Control-Allow-Headers: Content-Type');
 
 require_once __DIR__ . '/../config/database.php';
 
+// Format Firestore timestamps safely across different representations
+function formatTimestamp($value) {
+    try {
+        if ($value instanceof Google\Cloud\Core\Timestamp) {
+            $dt = $value->get();
+            if ($dt instanceof DateTimeInterface) {
+                return $dt->format('Y-m-d H:i:s');
+            }
+        } elseif (is_numeric($value)) {
+            return date('Y-m-d H:i:s', (int)$value);
+        } elseif (is_string($value)) {
+            $t = strtotime($value);
+            if ($t !== false) {
+                return date('Y-m-d H:i:s', $t);
+            }
+        }
+    } catch (Exception $e) {
+        // fall through
+    }
+    return null;
+}
+
 try {
     $db = Database::getInstance();
     $listingsRef = $db->getCollection('listings');
@@ -33,7 +55,7 @@ try {
             'quantity' => $listingData['quantity'] ?? 0,
             'status' => $listingData['status'] ?? 'active',
             'provider_id' => $listingData['provider_id'] ?? '',
-            'created_at' => isset($listingData['created_at']) ? $listingData['created_at']->toDateTime()->format('Y-m-d H:i:s') : null,
+            'created_at' => isset($listingData['created_at']) ? formatTimestamp($listingData['created_at']) : null,
             'images' => $listingData['images'] ?? [],
             'location' => $listingData['location'] ?? null
         ];

@@ -10,7 +10,7 @@ if (!isAdminLoggedIn()) {
     exit();
 }
 
-// Defer expensive dashboard queries to the client via API to prevent timeouts
+// Load comprehensive statistics
 $comprehensiveStats = [
     'users' => ['total_users' => 0, 'providers' => 0, 'consumers' => 0, 'verified_users' => 0, 'recent_signups' => 0],
     'listings' => ['active_listings' => 0, 'total_revenue' => 0],
@@ -18,6 +18,187 @@ $comprehensiveStats = [
     'orders' => ['total_food_saved' => 0, 'total_savings' => 0, 'total_orders' => 0, 'completed_orders' => 0, 'average_order_value' => 0],
     'top_providers' => []
 ];
+
+try {
+    set_time_limit(30); // Increased timeout for better data loading
+    
+    // Load user statistics with proper verified user counting
+    $usersRef = $db->getCollection('users');
+    $users = $usersRef->limit(100)->documents();
+    
+    $userCount = 0;
+    $providerCount = 0;
+    $consumerCount = 0;
+    $verifiedCount = 0;
+    $recentSignups = 0;
+    
+    $oneWeekAgo = new DateTime('-1 week');
+    
+    foreach ($users as $user) {
+        $userCount++;
+        $userData = $user->data();
+        
+        // Count by role
+        if (isset($userData['role'])) {
+            if ($userData['role'] === 'food_provider') {
+                $providerCount++;
+            } elseif ($userData['role'] === 'food_consumer') {
+                $consumerCount++;
+            }
+        }
+        
+        // Count verified users - check for verified field
+        if (isset($userData['verified']) && $userData['verified'] === true) {
+            $verifiedCount++;
+        }
+        
+        // Count recent signups
+        if (isset($userData['created_at'])) {
+            $createdAt = $userData['created_at'];
+            if ($createdAt instanceof Google\Cloud\Core\Timestamp) {
+                $createdDate = $createdAt->get();
+                if ($createdDate > $oneWeekAgo) {
+                    $recentSignups++;
+                }
+            }
+        }
+    }
+    
+    $comprehensiveStats['users'] = [
+        'total_users' => $userCount,
+        'providers' => $providerCount,
+        'consumers' => $consumerCount,
+        'verified_users' => $verifiedCount,
+        'recent_signups' => $recentSignups
+    ];
+    
+    // Load listing statistics
+    $listingsRef = $db->getCollection('listings');
+    $listings = $listingsRef->limit(50)->documents();
+    
+    $activeListings = 0;
+    $totalRevenue = 0;
+    
+    foreach ($listings as $listing) {
+        $listingData = $listing->data();
+        if (isset($listingData['status']) && $listingData['status'] === 'active') {
+            $activeListings++;
+        }
+        if (isset($listingData['discounted_price']) && isset($listingData['quantity'])) {
+            $totalRevenue += floatval($listingData['discounted_price']) * intval($listingData['quantity']);
+        }
+    }
+    
+    $comprehensiveStats['listings'] = [
+        'active_listings' => $activeListings,
+        'total_revenue' => $totalRevenue
+    ];
+    
+    // Load order statistics
+    $cartsRef = $db->getCollection('cart');
+    $carts = $cartsRef->limit(50)->documents();
+    
+    $totalOrders = 0;
+    $completedOrders = 0;
+    $totalFoodSaved = 0;
+    $totalSavings = 0;
+    $totalOrderValue = 0;
+    $orderCount = 0;
+    
+    foreach ($carts as $cart) {
+        $cartData = $cart->data();
+        $totalOrders++;
+        
+        // Count completed orders
+        if (isset($cartData['status'])) {
+            $status = strtolower(trim($cartData['status']));
+            if (in_array($status, ['completed', 'delivered', 'fulfilled', 'done', 'success', 'finished', 'picked_up'])) {
+                $completedOrders++;
+            }
+        }
+        
+        // Calculate savings and food saved
+        if (isset($cartData['total_price'])) {
+            $orderValue = floatval($cartData['total_price']);
+            $totalOrderValue += $orderValue;
+            $orderCount++;
+            $totalSavings += ($orderValue * 0.5); // Assuming 50% discount
+        }
+        
+        // Calculate food saved from items
+        if (isset($cartData['items']) && is_array($cartData['items'])) {
+            foreach ($cartData['items'] as $item) {
+                $quantity = isset($item['quantity']) ? intval($item['quantity']) : 0;
+                if (isset($item['weight_per_unit'])) {
+                    $weightKg = floatval($item['weight_per_unit']);
+                    $totalFoodSaved += ($quantity * $weightKg);
+                } else {
+                    // Estimate weight
+                    $totalFoodSaved += ($quantity * 0.5); // Default 500g per item
+                }
+            }
+        }
+    }
+    
+    $averageOrderValue = $orderCount > 0 ? round($totalOrderValue / $orderCount, 2) : 0;
+    
+    $comprehensiveStats['orders'] = [
+        'total_food_saved' => $totalFoodSaved,
+        'total_savings' => $totalSavings,
+        'total_orders' => $totalOrders,
+        'completed_orders' => $completedOrders,
+        'average_order_value' => $averageOrderValue
+    ];
+    
+    // Load top providers
+    $topProviders = [];
+    $providersRef = $db->getCollection('users');
+    $providers = $providersRef->where('role', '=', 'food_provider')->limit(20)->documents();
+    
+    foreach ($providers as $provider) {
+        $providerData = $provider->data();
+        $providerId = $provider->id();
+        
+        // Get provider's listings
+        $providerListings = $listingsRef->where('provider_id', '=', $providerId)->limit(50)->documents();
+        
+        $providerStats = [
+            'name' => $providerData['name'] ?? 'Unknown',
+            'email' => $providerData['email'] ?? '',
+            'active_listings' => 0,
+            'total_listings' => 0,
+            'total_revenue' => 0
+        ];
+        
+        foreach ($providerListings as $listing) {
+            $listingData = $listing->data();
+            $providerStats['total_listings']++;
+            
+            if (isset($listingData['status']) && $listingData['status'] === 'active') {
+                $providerStats['active_listings']++;
+            }
+            
+            if (isset($listingData['discounted_price']) && isset($listingData['quantity'])) {
+                $price = floatval($listingData['discounted_price']);
+                $quantity = intval($listingData['quantity']);
+                $providerStats['total_revenue'] += ($price * $quantity);
+            }
+        }
+        
+        $topProviders[] = $providerStats;
+    }
+    
+    // Sort by revenue and take top 5
+    usort($topProviders, function($a, $b) {
+        return $b['total_revenue'] <=> $a['total_revenue'];
+    });
+    
+    $comprehensiveStats['top_providers'] = array_slice($topProviders, 0, 5);
+    
+} catch (Exception $e) {
+    error_log("Error loading stats: " . $e->getMessage());
+    $errorMessage = "Error loading some data. Please refresh the page.";
+}
 $stats = $comprehensiveStats['orders'];
 $stats['pending_reports'] = $comprehensiveStats['reports']['pending_reports'];
 ?>
@@ -110,6 +291,14 @@ $stats['pending_reports'] = $comprehensiveStats['reports']['pending_reports'];
                         </div>
                     </div>
                 </div>
+
+                <?php if (isset($errorMessage)): ?>
+                <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <?php echo htmlspecialchars($errorMessage); ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                <?php endif; ?>
 
                 <!-- Statistics Cards -->
                 <div class="row">

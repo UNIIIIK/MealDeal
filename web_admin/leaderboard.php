@@ -216,18 +216,19 @@ $leaderboardData = getLeaderboardData($period, $type);
                     <?php endforeach; ?>
                 </div>
 
-                <!-- Statistics Summary -->
+                <!-- Statistics Summary with Line Charts -->
                 <div class="row mt-4">
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header">
                                 <h5 class="mb-0">
-                                    <i class="fas fa-chart-bar me-2"></i>
+                                    <i class="fas fa-chart-line me-2"></i>
                                     Leaderboard Statistics
                                 </h5>
                             </div>
                             <div class="card-body">
-                                <div class="row">
+                                <!-- Summary Cards -->
+                                <div class="row mb-4">
                                     <div class="col-md-3 text-center">
                                         <div class="stat-card">
                                             <div class="stat-icon text-success">
@@ -262,6 +263,53 @@ $leaderboardData = getLeaderboardData($period, $type);
                                             </div>
                                             <div class="stat-number">₱<?php echo number_format(getTotalSavings($period), 2); ?></div>
                                             <div class="stat-label">Total Savings</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Line Charts -->
+                                <div class="row">
+                                    <div class="col-lg-6 mb-4">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="mb-0">Food Saved Over Time</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <canvas id="foodSavedChart" height="200"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-6 mb-4">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="mb-0">Orders Over Time</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <canvas id="ordersChart" height="200"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-lg-6 mb-4">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="mb-0">User Activity Over Time</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <canvas id="usersChart" height="200"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-6 mb-4">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="mb-0">Revenue Over Time</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <canvas id="revenueChart" height="200"></canvas>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -312,6 +360,7 @@ $leaderboardData = getLeaderboardData($period, $type);
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="assets/js/leaderboard.js"></script>
 </body>
 </html>
@@ -361,19 +410,49 @@ function getTopProviders($startDate) {
                 $totalListings++;
                 
                 // Calculate food saved from completed orders
-                if (isset($listingData['quantity_sold']) && isset($listingData['weight_per_unit'])) {
-                    $foodSaved += ($listingData['quantity_sold'] * $listingData['weight_per_unit']);
+                // Since we don't have quantity_sold, let's estimate based on total quantity
+                if (isset($listingData['quantity'])) {
+                    $quantity = intval($listingData['quantity']);
+                    if ($quantity > 0) {
+                        // Try to get weight from listing first
+                        if (isset($listingData['weight_per_unit'])) {
+                            $weightPerUnit = floatval($listingData['weight_per_unit']);
+                        } else {
+                            // Estimate weight based on food type
+                            $weightPerUnit = estimateFoodWeight($listingData, $quantity);
+                        }
+                        $foodSaved += ($quantity * $weightPerUnit);
+                    }
                 }
             }
         }
         
+        // Debug: Check what date fields are available
+        $createdAt = null;
+        if (isset($userData['created_at'])) {
+            $createdAt = $userData['created_at'];
+        } elseif (isset($userData['createdAt'])) {
+            $createdAt = $userData['createdAt'];
+        } elseif (isset($userData['join_date'])) {
+            $createdAt = $userData['join_date'];
+        } elseif (isset($userData['date_joined'])) {
+            $createdAt = $userData['date_joined'];
+        } elseif (isset($userData['timestamp'])) {
+            $createdAt = $userData['timestamp'];
+        }
+        
+        // If no date found, use current time as fallback
+        if ($createdAt === null) {
+            $createdAt = time();
+        }
+        
         $providers[] = [
             'id' => $userId,
-            'name' => $userData['name'],
-            'email' => $userData['email'],
+            'name' => $userData['name'] ?? 'Unknown',
+            'email' => $userData['email'] ?? 'No email',
             'total_listings' => $totalListings,
             'food_saved' => $foodSaved,
-            'created_at' => $userData['created_at']
+            'created_at' => $createdAt
         ];
     }
     
@@ -418,13 +497,32 @@ function getTopConsumers($startDate) {
             }
         }
         
+        // Debug: Check what date fields are available
+        $createdAt = null;
+        if (isset($userData['created_at'])) {
+            $createdAt = $userData['created_at'];
+        } elseif (isset($userData['createdAt'])) {
+            $createdAt = $userData['createdAt'];
+        } elseif (isset($userData['join_date'])) {
+            $createdAt = $userData['join_date'];
+        } elseif (isset($userData['date_joined'])) {
+            $createdAt = $userData['date_joined'];
+        } elseif (isset($userData['timestamp'])) {
+            $createdAt = $userData['timestamp'];
+        }
+        
+        // If no date found, use current time as fallback
+        if ($createdAt === null) {
+            $createdAt = time();
+        }
+        
         $consumers[] = [
             'id' => $userId,
-            'name' => $userData['name'],
-            'email' => $userData['email'],
+            'name' => $userData['name'] ?? 'Unknown',
+            'email' => $userData['email'] ?? 'No email',
             'total_orders' => $totalOrders,
             'total_savings' => $totalSavings,
-            'created_at' => $userData['created_at']
+            'created_at' => $createdAt
         ];
     }
     
@@ -455,19 +553,57 @@ function getTotalFoodSaved($period) {
     try {
         $startDate = getStartDate($period);
         $cartsRef = $db->getCollection('cart');
-        $carts = $cartsRef->where('status', '=', 'completed')->documents();
+        $carts = $cartsRef->limit(100)->documents();
         
         $totalFoodSaved = 0;
+        $cartCount = 0;
+        
         foreach ($carts as $cart) {
-            $cartData = $cart->data();
+            if ($cartCount >= 100) break; // Safety limit
             
-            if ($startDate === null || $cartData['checkout_date'] >= $startDate) {
-                if (isset($cartData['items'])) {
-                    foreach ($cartData['items'] as $item) {
-                        if (isset($item['quantity']) && isset($item['weight_per_unit'])) {
-                            $totalFoodSaved += ($item['quantity'] * $item['weight_per_unit']);
+            $cartData = $cart->data();
+            $cartCount++;
+            
+            // Check if cart is within the period
+            $cartDate = $cartData['checkout_date'] ?? $cartData['created_at'] ?? time();
+            if ($startDate !== null && $cartDate < $startDate) {
+                continue;
+            }
+            
+            // Calculate food saved from items
+            if (isset($cartData['items']) && is_array($cartData['items'])) {
+                foreach ($cartData['items'] as $item) {
+                    $quantity = isset($item['quantity']) ? intval($item['quantity']) : 0;
+                    if ($quantity > 0) {
+                        // Try to get weight from item first
+                        if (isset($item['weight_per_unit'])) {
+                            $weightPerUnit = floatval($item['weight_per_unit']);
+                        } else {
+                            // Look up listing for weight estimation
+                            try {
+                                if (isset($item['listing_id'])) {
+                                    $listingDoc = $db->getDocument('listings', $item['listing_id'])->snapshot();
+                                    if ($listingDoc->exists()) {
+                                        $listingData = $listingDoc->data();
+                                        $weightPerUnit = estimateFoodWeight($listingData, $quantity);
+                                    } else {
+                                        $weightPerUnit = 0.5; // Default fallback
+                                    }
+                                } else {
+                                    $weightPerUnit = 0.5; // Default fallback
+                                }
+                            } catch (Exception $e) {
+                                $weightPerUnit = 0.5; // Default fallback
+                            }
                         }
+                        $totalFoodSaved += ($quantity * $weightPerUnit);
                     }
+                }
+            } else {
+                // If no items array, estimate based on total price (assuming average weight per peso)
+                if (isset($cartData['total_price'])) {
+                    $totalPrice = floatval($cartData['total_price']);
+                    $totalFoodSaved += ($totalPrice * 0.1); // Estimate 100g per peso
                 }
             }
         }
@@ -485,14 +621,64 @@ function getActiveUsers($period) {
     try {
         $startDate = getStartDate($period);
         $usersRef = $db->getCollection('users');
-        $users = $usersRef->documents();
+        $users = $usersRef->limit(100)->documents();
         
         $activeUsers = 0;
+        $userCount = 0;
+        
         foreach ($users as $user) {
-            $userData = $user->data();
+            if ($userCount >= 100) break; // Safety limit
             
-            if ($startDate === null || $userData['last_activity'] >= $startDate) {
+            $userData = $user->data();
+            $userCount++;
+            
+            // If no start date filter, count all users
+            if ($startDate === null) {
                 $activeUsers++;
+                continue;
+            }
+            
+            // Check various activity fields
+            $lastActivity = null;
+            if (isset($userData['last_activity'])) {
+                $lastActivity = $userData['last_activity'];
+            } elseif (isset($userData['last_login'])) {
+                $lastActivity = $userData['last_login'];
+            } elseif (isset($userData['updated_at'])) {
+                $lastActivity = $userData['updated_at'];
+            } elseif (isset($userData['created_at'])) {
+                $lastActivity = $userData['created_at'];
+            }
+            
+            // If we have activity data and it's within the period, count as active
+            if ($lastActivity !== null) {
+                if (is_numeric($lastActivity)) {
+                    if ($lastActivity >= $startDate) {
+                        $activeUsers++;
+                    }
+                } elseif ($lastActivity instanceof Google\Cloud\Core\Timestamp) {
+                    $activityDate = $lastActivity->get();
+                    if ($activityDate instanceof DateTimeInterface) {
+                        $activityTimestamp = $activityDate->getTimestamp();
+                        if ($activityTimestamp >= $startDate) {
+                            $activeUsers++;
+                        }
+                    }
+                }
+            } else {
+                // If no activity data, count as active if created within period
+                if (isset($userData['created_at'])) {
+                    $createdAt = $userData['created_at'];
+                    if ($createdAt instanceof Google\Cloud\Core\Timestamp) {
+                        $createdDate = $createdAt->get();
+                        if ($createdDate instanceof DateTimeInterface) {
+                            $createdTimestamp = $createdDate->getTimestamp();
+                            if ($createdTimestamp >= $startDate) {
+                                $activeUsers++;
+                            }
+                        }
+                    }
+                }
             }
         }
         
@@ -509,15 +695,25 @@ function getTotalOrders($period) {
     try {
         $startDate = getStartDate($period);
         $cartsRef = $db->getCollection('cart');
-        $carts = $cartsRef->where('status', '=', 'completed')->documents();
+        $carts = $cartsRef->limit(100)->documents();
         
         $totalOrders = 0;
+        $cartCount = 0;
+        
         foreach ($carts as $cart) {
-            $cartData = $cart->data();
+            if ($cartCount >= 100) break; // Safety limit
             
-            if ($startDate === null || $cartData['checkout_date'] >= $startDate) {
-                $totalOrders++;
+            $cartData = $cart->data();
+            $cartCount++;
+            
+            // Check if cart is within the period
+            $cartDate = $cartData['checkout_date'] ?? $cartData['created_at'] ?? time();
+            if ($startDate !== null && $cartDate < $startDate) {
+                continue;
             }
+            
+            // Count all orders, not just completed ones
+            $totalOrders++;
         }
         
         return $totalOrders;
@@ -533,16 +729,28 @@ function getTotalSavings($period) {
     try {
         $startDate = getStartDate($period);
         $cartsRef = $db->getCollection('cart');
-        $carts = $cartsRef->where('status', '=', 'completed')->documents();
+        $carts = $cartsRef->limit(100)->documents();
         
         $totalSavings = 0;
+        $cartCount = 0;
+        
         foreach ($carts as $cart) {
-            $cartData = $cart->data();
+            if ($cartCount >= 100) break; // Safety limit
             
-            if ($startDate === null || $cartData['checkout_date'] >= $startDate) {
-                if (isset($cartData['total_savings'])) {
-                    $totalSavings += $cartData['total_savings'];
-                }
+            $cartData = $cart->data();
+            $cartCount++;
+            
+            // Check if cart is within the period
+            $cartDate = $cartData['checkout_date'] ?? $cartData['created_at'] ?? time();
+            if ($startDate !== null && $cartDate < $startDate) {
+                continue;
+            }
+            
+            // Calculate savings - if no explicit savings field, estimate 50% of total price
+            if (isset($cartData['total_savings'])) {
+                $totalSavings += floatval($cartData['total_savings']);
+            } elseif (isset($cartData['total_price'])) {
+                $totalSavings += (floatval($cartData['total_price']) * 0.5); // Estimate 50% savings
             }
         }
         
@@ -553,10 +761,84 @@ function getTotalSavings($period) {
     }
 }
 
-function formatDate($timestamp) {
-    if ($timestamp instanceof \Google\Cloud\Core\Timestamp) {
-        return $timestamp->get()->format('M j, Y');
+/**
+ * Estimate food weight based on listing data
+ */
+function estimateFoodWeight($listingData, $quantity) {
+    // Default weight estimation based on food type
+    $defaultWeightPerUnit = 0.5; // 500g per unit as default
+    
+    // Get food type from listing
+    $type = $listingData['type'] ?? 'other';
+    $name = strtolower($listingData['name'] ?? '');
+    
+    // Estimate based on food type
+    switch ($type) {
+        case 'main_dish':
+            $defaultWeightPerUnit = 0.8; // 800g for main dishes
+            break;
+        case 'side_dish':
+            $defaultWeightPerUnit = 0.3; // 300g for side dishes
+            break;
+        case 'dessert':
+            $defaultWeightPerUnit = 0.2; // 200g for desserts
+            break;
+        case 'beverage':
+            $defaultWeightPerUnit = 0.5; // 500ml for beverages (treating as weight)
+            break;
+        case 'snack':
+            $defaultWeightPerUnit = 0.1; // 100g for snacks
+            break;
+        case 'pickup':
+            // For pickup items, estimate based on name
+            if (strpos($name, 'ensaymada') !== false || strpos($name, 'bread') !== false || strpos($name, 'pastry') !== false) {
+                $defaultWeightPerUnit = 0.15; // ~150g per piece
+            } elseif (strpos($name, 'rice') !== false || strpos($name, 'meal') !== false) {
+                $defaultWeightPerUnit = 0.6; // ~600g per serving
+            } else {
+                $defaultWeightPerUnit = 0.3; // Default for pickup items
+            }
+            break;
+        default:
+            // Try to estimate based on name keywords
+            if (strpos($name, 'soup') !== false || strpos($name, 'stew') !== false) {
+                $defaultWeightPerUnit = 0.6;
+            } elseif (strpos($name, 'salad') !== false) {
+                $defaultWeightPerUnit = 0.4;
+            } elseif (strpos($name, 'pizza') !== false || strpos($name, 'burger') !== false) {
+                $defaultWeightPerUnit = 0.7;
+            } elseif (strpos($name, 'cake') !== false || strpos($name, 'pie') !== false) {
+                $defaultWeightPerUnit = 0.3;
+            } elseif (strpos($name, 'ensaymada') !== false || strpos($name, 'bread') !== false) {
+                $defaultWeightPerUnit = 0.15;
+            }
+            break;
     }
+    
+    return $defaultWeightPerUnit;
+}
+
+function formatDate($timestamp) {
+    // Handle null values
+    if ($timestamp === null) {
+        return '—';
+    }
+    
+    // Handle Google Cloud Timestamp objects
+    if ($timestamp instanceof \Google\Cloud\Core\Timestamp) {
+        try {
+            $dateTime = $timestamp->get();
+            if ($dateTime instanceof DateTimeInterface) {
+                return $dateTime->format('M j, Y');
+            }
+            return '—';
+        } catch (Exception $e) {
+            error_log("Error formatting Google Timestamp: " . $e->getMessage());
+            return '—';
+        }
+    }
+    
+    // Handle array format (Firestore timestamp)
     if (is_array($timestamp)) {
         $seconds = $timestamp['seconds'] ?? null;
         if ($seconds !== null) {
@@ -564,9 +846,22 @@ function formatDate($timestamp) {
         }
         return '—';
     }
+    
+    // Handle numeric timestamps
     if (is_numeric($timestamp)) {
         return date('M j, Y', (int)$timestamp);
     }
+    
+    // Handle string timestamps
+    if (is_string($timestamp)) {
+        // Try to parse as date string
+        $parsed = strtotime($timestamp);
+        if ($parsed !== false) {
+            return date('M j, Y', $parsed);
+        }
+    }
+    
+    // If we can't parse it, return a dash
     return '—';
 }
 ?>
