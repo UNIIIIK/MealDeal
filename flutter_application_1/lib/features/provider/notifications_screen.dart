@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
+import '../../theme/app_theme.dart';
 import '../../services/messaging_service.dart';
 import '../../features/auth/auth_service.dart';
 import '../messaging/chat_screen.dart';
@@ -14,27 +15,43 @@ class NotificationsScreen extends StatelessWidget {
   Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _getCombinedNotificationsStream() {
     return FirebaseFirestore.instance
         .collection('notifications')
-        .where('receiverId', isEqualTo: providerId)
-        .where('type', whereIn: ['message', 'new_order', 'pending_order', 'order_claimed'])
-        .orderBy('created_at', descending: true)
+        .where('provider_id', isEqualTo: providerId)
         .limit(50)
         .snapshots()
-        .map((snapshot) => snapshot.docs);
+        .map((snapshot) {
+          // Sort in memory instead of using orderBy
+          final docs = snapshot.docs.toList();
+          docs.sort((a, b) {
+            final aTime = a.data()['created_at'] as Timestamp?;
+            final bTime = b.data()['created_at'] as Timestamp?;
+            if (aTime == null && bTime == null) return 0;
+            if (aTime == null) return 1;
+            if (bTime == null) return -1;
+            return bTime.compareTo(aTime); // Descending order
+          });
+          return docs;
+        });
   }
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Notifications'),
+        backgroundColor: AppTheme.primaryOrange,
+        foregroundColor: Colors.white,
+        title: const Text(
+          'Notifications',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () async {
               final query = FirebaseFirestore.instance
                   .collection('notifications')
-                  .where('receiverId', isEqualTo: providerId)
-                  .where('type', whereIn: ['message', 'new_order', 'pending_order', 'order_claimed']);
+                  .where('provider_id', isEqualTo: providerId);
               
               final snap = await query.get();
               
@@ -44,11 +61,21 @@ class NotificationsScreen extends StatelessWidget {
               
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('All notifications marked as read')),
+                  SnackBar(
+                    content: const Text('All notifications marked as read'),
+                    backgroundColor: AppTheme.primaryGreen,
+                  ),
                 );
               }
             },
-            child: const Text('Mark all read'),
+            child: const Text(
+              'Mark all read',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontFamily: 'Inter',
+              ),
+            ),
           ),
         ],
       ),

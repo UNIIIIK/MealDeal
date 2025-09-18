@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import '../../theme/app_theme.dart';
 import '../auth/auth_service.dart';
 import 'provider_location_setup_screen.dart';
 import '../../services/geo_service.dart';
@@ -26,6 +27,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   final _quantityController = TextEditingController();
   
   DateTime? _selectedExpiryDate;
+  TimeOfDay? _selectedExpiryTime;
   final String _selectedType = 'pickup';
   Uint8List? _imageBytes; // Web preview
   bool _isLoading = false;
@@ -51,6 +53,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   
   // Predefined allergens
   final List<String> _predefinedAllergens = [
+    'None',
     'Nuts',
     'Dairy',
     'Gluten',
@@ -60,8 +63,12 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     'Shellfish',
     'Sesame',
     'Sulfites',
-    'None'
+    'Others'
   ];
+  
+  // Additional fields for custom allergens
+  bool _showCustomAllergens = false;
+  final TextEditingController _customAllergensController = TextEditingController();
 
   final ImagePicker _picker = ImagePicker();
 
@@ -70,6 +77,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     _titleController.dispose();
     _descriptionController.dispose();
     _allergensController.dispose();
+    _customAllergensController.dispose();
     _originalPriceController.dispose();
     _quantityController.dispose();
     super.dispose();
@@ -155,13 +163,24 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     if (_selectedAllergens.isEmpty) return false;
     final price = double.tryParse(_originalPriceController.text);
     if (price == null || price <= 0) return false;
-    if (_selectedExpiryDate == null || _selectedExpiryDate!.isBefore(DateTime.now())) return false;
+    if (_selectedExpiryDate == null || _selectedExpiryTime == null) return false;
+    
+    // Combine date and time
+    final expiryDateTime = DateTime(
+      _selectedExpiryDate!.year,
+      _selectedExpiryDate!.month,
+      _selectedExpiryDate!.day,
+      _selectedExpiryTime!.hour,
+      _selectedExpiryTime!.minute,
+    );
+    
+    if (expiryDateTime.isBefore(DateTime.now())) return false;
     return true;
   }
 
   Future<void> _createListing() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedExpiryDate == null) {
+    if (_selectedExpiryDate == null || _selectedExpiryTime == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select an expiry date and time')),
       );
@@ -228,19 +247,34 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       final original = double.parse(_originalPriceController.text);
       final computedDiscounted = original * (1 - (_discountPercent / 100));
 
+      // Combine date and time for expiry
+      final expiryDateTime = DateTime(
+        _selectedExpiryDate!.year,
+        _selectedExpiryDate!.month,
+        _selectedExpiryDate!.day,
+        _selectedExpiryTime!.hour,
+        _selectedExpiryTime!.minute,
+      );
+
+      // Prepare allergens list
+      List<String> finalAllergens = List.from(_selectedAllergens);
+      if (_selectedAllergens.contains('Others') && _customAllergensController.text.trim().isNotEmpty) {
+        finalAllergens.remove('Others');
+        finalAllergens.add(_customAllergensController.text.trim());
+      }
+
       // Create listing document; include provider location snapshot if available
       final listingData = {
         'provider_id': authService.currentUser!.uid,
         'title': _titleController.text.trim(),
         'description': _descriptionController.text.trim(),
         'food_type': _selectedFoodType,
-        'allergens': _selectedAllergens,
-        'custom_allergens': _allergensController.text.trim(),
+        'allergens': finalAllergens,
         'original_price': original,
         'discount_percent': _discountPercent,
         'discounted_price': double.parse(computedDiscounted.toStringAsFixed(2)),
         'quantity': int.parse(_quantityController.text),
-        'expiry_datetime': _selectedExpiryDate != null ? Timestamp.fromDate(_selectedExpiryDate!) : null,
+        'expiry_datetime': Timestamp.fromDate(expiryDateTime),
         'type': _selectedType,
         'images': imageUrl != null ? [imageUrl] : [],
         'status': 'active',
@@ -562,20 +596,6 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                       
                       // Allergens Selection
                       _buildAllergensSelector(),
-                      const SizedBox(height: 16),
-                      
-                      // Custom Allergens field
-                      _buildEnhancedTextField(
-                        controller: _allergensController,
-                        label: 'Additional Allergen Information',
-                        icon: Icons.warning,
-                        color: Colors.red,
-                        hint: 'e.g., Contains nuts, dairy, gluten (optional)',
-                        validator: (value) {
-                          // No longer required since we have predefined allergens
-                          return null;
-                        },
-                      ),
                     ],
                   ),
                 ),
@@ -846,7 +866,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                       ),
                       const SizedBox(height: 20),
                       
-                      // Expiry date picker
+                      // Expiry date and time picker
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -854,21 +874,24 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                             children: [
                               Icon(
                                 Icons.calendar_today,
-                                color: Colors.red.shade700,
+                                color: AppTheme.primaryRed,
                                 size: 20,
                               ),
                               const SizedBox(width: 8),
                               const Text(
-                                'Expiry Date',
+                                'Expiry Date & Time',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.black87,
+                                  color: AppTheme.darkGray,
+                                  fontFamily: 'Poppins',
                                 ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 8),
+                          Column(
+                            children: [
                           GestureDetector(
                             onTap: () async {
                               final date = await showDatePicker(
@@ -880,10 +903,10 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                                   return Theme(
                                     data: Theme.of(context).copyWith(
                                       colorScheme: ColorScheme.light(
-                                        primary: Colors.orange.shade600,
+                                            primary: AppTheme.primaryOrange,
                                         onPrimary: Colors.white,
                                         surface: Colors.white,
-                                        onSurface: Colors.black87,
+                                            onSurface: AppTheme.darkGray,
                                       ),
                                     ),
                                     child: child!,
@@ -897,49 +920,129 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                               }
                             },
                             child: Container(
+                                  width: double.infinity,
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
-                                color: Colors.grey.shade50,
+                                    color: AppTheme.backgroundGray,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.grey.shade300),
+                                    border: Border.all(color: AppTheme.lightGray),
                               ),
                               child: Row(
                                 children: [
                                   Icon(
                                     Icons.event,
-                                    color: Colors.grey.shade600,
+                                        color: AppTheme.mediumGray,
                                     size: 20,
                                   ),
                                   const SizedBox(width: 12),
-                                  Text(
+                                      Expanded(
+                                        child: Text(
                                     _selectedExpiryDate != null
                                         ? DateFormat('MMM dd, yyyy').format(_selectedExpiryDate!)
-                                        : 'Select expiry date',
+                                              : 'Select date',
                                     style: TextStyle(
                                       color: _selectedExpiryDate != null
-                                          ? Colors.black87
-                                          : Colors.grey.shade500,
+                                                ? AppTheme.darkGray
+                                                : AppTheme.mediumGray,
                                       fontSize: 16,
+                                            fontFamily: 'Inter',
                                     ),
+                                          overflow: TextOverflow.ellipsis,
                                   ),
-                                  const Spacer(),
+                                      ),
                                   Icon(
                                     Icons.arrow_drop_down,
-                                    color: Colors.grey.shade600,
+                                        color: AppTheme.mediumGray,
                                   ),
                                 ],
                               ),
                             ),
                           ),
-                          if (_selectedExpiryDate != null)
+                              const SizedBox(height: 12),
+                              GestureDetector(
+                                onTap: () async {
+                                  final time = await showTimePicker(
+                                    context: context,
+                                    initialTime: TimeOfDay.now(),
+                                    builder: (context, child) {
+                                      return Theme(
+                                        data: Theme.of(context).copyWith(
+                                          colorScheme: ColorScheme.light(
+                                            primary: AppTheme.primaryOrange,
+                                            onPrimary: Colors.white,
+                                            surface: Colors.white,
+                                            onSurface: AppTheme.darkGray,
+                                          ),
+                                        ),
+                                        child: child!,
+                                      );
+                                    },
+                                  );
+                                  if (time != null) {
+                                    setState(() {
+                                      _selectedExpiryTime = time;
+                                    });
+                                  }
+                                },
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.backgroundGray,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: AppTheme.lightGray),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.access_time,
+                                        color: AppTheme.mediumGray,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          _selectedExpiryTime != null
+                                              ? _selectedExpiryTime!.format(context)
+                                              : 'Select time',
+                                          style: TextStyle(
+                                            color: _selectedExpiryTime != null
+                                                ? AppTheme.darkGray
+                                                : AppTheme.mediumGray,
+                                            fontSize: 16,
+                                            fontFamily: 'Inter',
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      Icon(
+                                        Icons.arrow_drop_down,
+                                        color: AppTheme.mediumGray,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (_selectedExpiryDate != null && _selectedExpiryTime != null)
                             Padding(
                               padding: const EdgeInsets.only(top: 8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryOrange.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: AppTheme.primaryOrange.withOpacity(0.3)),
+                                ),
                               child: Text(
-                                'Expires in ${DateTime.now().difference(_selectedExpiryDate!).inDays.abs()} days',
+                                  'Expires: ${DateFormat('MMM dd, yyyy').format(_selectedExpiryDate!)} at ${_selectedExpiryTime!.format(context)}',
                                 style: TextStyle(
-                                  color: Colors.orange.shade700,
+                                    color: AppTheme.primaryOrange,
                                   fontSize: 12,
-                                  fontWeight: FontWeight.w500,
+                                    fontWeight: FontWeight.w600,
+                                    fontFamily: 'Inter',
+                                  ),
                                 ),
                               ),
                             ),
@@ -1240,7 +1343,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
           children: [
             Icon(
               Icons.warning,
-              color: Colors.red.shade700,
+              color: AppTheme.primaryRed,
               size: 20,
             ),
             const SizedBox(width: 8),
@@ -1249,13 +1352,14 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: Colors.black87,
+                color: AppTheme.darkGray,
+                fontFamily: 'Poppins',
               ),
             ),
             const Text(
               ' *',
               style: TextStyle(
-                color: Colors.red,
+                color: AppTheme.primaryRed,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
               ),
@@ -1266,9 +1370,9 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade300),
+            color: AppTheme.backgroundGray,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTheme.lightGray),
           ),
           child: Column(
             children: [
@@ -1285,32 +1389,72 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                         if (selected) {
                           if (allergen == 'None') {
                             _selectedAllergens = ['None'];
-                          } else {
+                            _showCustomAllergens = false;
+                          } else if (allergen == 'Others') {
                             _selectedAllergens.remove('None');
                             _selectedAllergens.add(allergen);
+                            _showCustomAllergens = true;
+                          } else {
+                            _selectedAllergens.remove('None');
+                            _selectedAllergens.remove('Others');
+                            _selectedAllergens.add(allergen);
+                            _showCustomAllergens = false;
                           }
                         } else {
                           _selectedAllergens.remove(allergen);
+                          if (allergen == 'Others') {
+                            _showCustomAllergens = false;
+                          }
                         }
                       });
                     },
-                    selectedColor: Colors.red.shade100,
-                    checkmarkColor: Colors.red.shade700,
+                    selectedColor: AppTheme.primaryRed.withOpacity(0.2),
+                    checkmarkColor: AppTheme.primaryRed,
                     labelStyle: TextStyle(
-                      color: isSelected ? Colors.red.shade700 : Colors.grey.shade700,
+                      color: isSelected ? AppTheme.primaryRed : AppTheme.mediumGray,
                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      fontFamily: 'Inter',
                     ),
                   );
                 }).toList(),
               ),
+              if (_showCustomAllergens) ...[
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _customAllergensController,
+                  decoration: InputDecoration(
+                    hintText: 'Enter other allergens...',
+                    hintStyle: TextStyle(
+                      color: AppTheme.mediumGray,
+                      fontFamily: 'Inter',
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: AppTheme.lightGray),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: AppTheme.lightGray),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: AppTheme.primaryRed, width: 2),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                ),
+              ],
               if (_selectedAllergens.isEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
                     'Please select at least one allergen or "None"',
                     style: TextStyle(
-                      color: Colors.red.shade600,
+                      color: AppTheme.primaryRed,
                       fontSize: 12,
+                      fontFamily: 'Inter',
                     ),
                   ),
                 ),

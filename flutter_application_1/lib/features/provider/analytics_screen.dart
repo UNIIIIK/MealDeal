@@ -167,6 +167,25 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           final maxVal = entries.map((e) => e.value).fold<double>(0, (p, c) => c > p ? c : p);
           final totalOrders = dayToOrders.values.fold(0, (sum, count) => sum + count);
           final totalSaved = dayToSaved.values.fold(0.0, (sum, value) => sum + value);
+          
+          // Calculate more accurate y-axis intervals
+          double yAxisInterval;
+          if (maxVal == 0) {
+            yAxisInterval = 100;
+          } else if (maxVal <= 100) {
+            yAxisInterval = 20;
+          } else if (maxVal <= 500) {
+            yAxisInterval = 50;
+          } else if (maxVal <= 1000) {
+            yAxisInterval = 100;
+          } else if (maxVal <= 5000) {
+            yAxisInterval = 500;
+          } else {
+            yAxisInterval = 1000;
+          }
+          
+          // Calculate maxY with proper rounding
+          final maxY = maxVal > 0 ? (maxVal / yAxisInterval).ceil() * yAxisInterval : yAxisInterval;
 
           return Padding(
             padding: const EdgeInsets.all(16),
@@ -285,7 +304,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       LineChartData(
                             gridData: FlGridData(
                               show: true, 
-                              horizontalInterval: maxVal > 0 ? maxVal / 5 : 1,
+                              horizontalInterval: yAxisInterval,
                               verticalInterval: 1,
                             ),
                         titlesData: FlTitlesData(
@@ -333,7 +352,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         ),
                         borderData: FlBorderData(show: true),
                         minY: 0,
-                            maxY: maxVal > 0 ? maxVal * 1.1 : 100,
+                        maxY: maxY,
                         lineBarsData: [
                           LineChartBarData(
                             isCurved: true,

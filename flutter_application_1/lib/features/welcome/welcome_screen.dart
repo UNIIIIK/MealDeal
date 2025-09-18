@@ -113,7 +113,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[50],
-      body: Container(
+      body: DefaultTabController(
+        length: 2,
+        child: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -146,10 +148,58 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // (Hero card moved below CTA)
                     const SizedBox(height: 12),
-                    
-                    // Enhanced Featured Deals section
+                    Expanded(
+                      child: TabBarView(
+                        children: [
+                          _buildHomeContent(context),
+                          _buildProfileSection(context),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Bottom navigation style tabs (Home, Profile)
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.06),
+                            blurRadius: 12,
+                            offset: const Offset(0, -4),
+                          ),
+                        ],
+                        border: Border(
+                          top: BorderSide(color: Colors.grey.shade200),
+                        ),
+                      ),
+                      child: TabBar(
+                        labelColor: Colors.orange.shade600,
+                        unselectedLabelColor: Colors.grey.shade600,
+                        indicatorColor: Colors.transparent,
+                        labelPadding: const EdgeInsets.symmetric(vertical: 6),
+                        tabs: const [
+                          Tab(icon: Icon(Icons.home_outlined, size: 28), text: 'Home'),
+                          Tab(icon: Icon(Icons.person_outline, size: 28), text: 'Profile'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            
+          ],
+        ),
+      ),
+    ),
+    );
+  }
+
+  Widget _buildHomeContent(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
                     FadeTransition(
                       opacity: _fadeAnimation,
                       child: Container(
@@ -187,231 +237,376 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                       ),
                     ),
                     const SizedBox(height: 16),
-                    
-                    // New CTA Section - Compact and Convenient
-                    Consumer<AuthService>(
-                      builder: (context, authService, child) {
-                        if (authService.currentUser == null) {
-                          return Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 16),
-                            padding: const EdgeInsets.all(16),
+                                    Expanded(
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
+                final cross = width >= 1000 ? 4 : (width >= 700 ? 3 : 2);
+                final aspect = width >= 700 ? 0.9 : 0.8;
+                return GridView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: cross,
+                    childAspectRatio: aspect,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                  ),
+                  itemCount: dummyListings.length,
+                  itemBuilder: (context, index) {
+                    final listing = dummyListings[index];
+                    return _buildEnhancedListingCard(context, listing, index);
+                  },
+                );
+              },
+            ),
+                                      ),
+                                    ),
+                                  ],
+    );
+  }
+
+  Widget _buildProfileSection(BuildContext context) {
+    return Consumer<AuthService>(
+      builder: (context, authService, child) {
+        final isLoggedIn = authService.currentUser != null;
+        return FadeTransition(
+          opacity: _fadeAnimation,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Welcome Header Card
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.green.shade50, Colors.blue.shade50],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 15,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                    border: Border.all(color: Colors.green.shade100),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 60,
+                            height: 60,
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.9),
-                              borderRadius: BorderRadius.circular(12),
+                              gradient: LinearGradient(
+                                colors: [Colors.green.shade400, Colors.blue.shade400],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(16),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.1),
+                                  color: Colors.green.shade200,
                                   blurRadius: 8,
-                                  offset: const Offset(0, 2),
+                                  offset: const Offset(0, 4),
                                 ),
                               ],
                             ),
+                            child: Icon(
+                              Icons.person,
+                              color: Colors.white,
+                              size: 32,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
                             child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Get Started',
-                                  style: TextStyle(
-                                    fontSize: 16,
+                                  isLoggedIn ? (authService.userData?['name'] ?? authService.currentUser!.email ?? 'Welcome') : 'Welcome to MealDeal',
+                                  style: const TextStyle(
+                                    fontSize: 22,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.grey.shade800,
+                                    color: Colors.black87,
                                   ),
                                 ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: _buildCompactButton(
-                                        onPressed: () => _showAuthModal(context, isLogin: true),
-                                        text: 'Login',
-                                        icon: Icons.login,
-                                        backgroundColor: Colors.green.shade600,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: _buildCompactButton(
-                                        onPressed: () => _showAuthModal(context, isLogin: false),
-                                        text: 'Register (Consumer)',
-                                        icon: Icons.person_add,
-                                        backgroundColor: Colors.blue.shade600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          );
-                        } else {
-                          return Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 16),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.9),
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.1),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.green.shade100,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Icon(Icons.person, color: Colors.green.shade700, size: 20),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    'Welcome, ${authService.currentUser!.email}',
-                                    style: TextStyle(
-                                      color: Colors.grey.shade800,
-                                      fontWeight: FontWeight.w500,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: () => authService.signOut(),
-                                  style: TextButton.styleFrom(
-                                    backgroundColor: Colors.red.shade50,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    'Logout',
-                                    style: TextStyle(
-                                      color: Colors.red.shade700,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 12,
-                                    ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  isLoggedIn ? 'Explore fresh deals around you' : 'Sign in or create an account to start saving',
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ],
                             ),
-                          );
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Enhanced listings grid
-                    Expanded(
-                      child: FadeTransition(
-                        opacity: _fadeAnimation,
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final width = constraints.maxWidth;
-                            final cross = width >= 1000 ? 4 : (width >= 700 ? 3 : 2);
-                            final aspect = width >= 700 ? 0.9 : 0.8;
-                            return GridView.builder(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: cross,
-                                childAspectRatio: aspect,
-                                crossAxisSpacing: 12,
-                                mainAxisSpacing: 12,
-                              ),
-                              itemCount: dummyListings.length,
-                              itemBuilder: (context, index) {
-                                final listing = dummyListings[index];
-                                return _buildEnhancedListingCard(context, listing, index);
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // Hero card at the very bottom (compact)
-                    FadeTransition(
-                      opacity: _fadeAnimation,
-                      child: SlideTransition(
-                        position: _slideAnimation,
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12.0),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [Colors.orange.shade400, Colors.green.shade400],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.16),
-                                blurRadius: 10,
-                                offset: const Offset(0, 5),
-                              ),
-                            ],
                           ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Icon(Icons.eco, color: Colors.white, size: 18),
+                          if (isLoggedIn)
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.red.shade200),
                               ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: const [
-                                    Text(
-                                      'Extra food on hand?',
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w800,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    SizedBox(height: 4),
-                                    Text(
-                                      'Start selling and reduce waste',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.white70,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                              child: IconButton(
+                                onPressed: () => authService.signOut(),
+                                icon: Icon(Icons.logout, color: Colors.red.shade600, size: 20),
+                                tooltip: 'Logout',
                               ),
-                              const SizedBox(width: 8),
-                              ElevatedButton.icon(
-                                onPressed: () => _showProviderRegistration(context),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.white,
-                                  foregroundColor: Colors.orange.shade700,
-                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                ),
-                                icon: const Icon(Icons.store, size: 14),
-                                label: const Text('Register (Provider)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
-                              ),
-                            ],
-                          ),
-                        ),
+                            ),
+                        ],
                       ),
-                    ),
-                  ],
+                      if (!isLoggedIn) ...[
+                        const SizedBox(height: 20),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildModernButton(
+                                onPressed: () => _showAuthModal(context, isLogin: true),
+                                text: 'Login',
+                                icon: Icons.login_rounded,
+                                backgroundColor: Colors.green.shade600,
+                                textColor: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _buildModernButton(
+                                onPressed: () => _showAuthModal(context, isLogin: false),
+                                text: 'Register',
+                                icon: Icons.person_add_rounded,
+                                backgroundColor: Colors.blue.shade600,
+                                textColor: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-              ),
-            
-          ],
+                
+                const SizedBox(height: 20),
+                
+                // Features Section
+                if (!isLoggedIn) ...[
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                      border: Border.all(color: Colors.grey.shade100),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade100,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(Icons.star_rounded, color: Colors.orange.shade600, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            const Text(
+                              'Why Choose MealDeal?',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        _buildFeatureItem(Icons.savings, 'Save Money', 'Get up to 50% off on surplus food'),
+                        _buildFeatureItem(Icons.eco, 'Reduce Waste', 'Help prevent food waste in your community'),
+                        _buildFeatureItem(Icons.local_grocery_store, 'Surplus Food', 'Quality surplus food that would otherwise go to waste'),
+                        _buildFeatureItem(Icons.timer, 'Quick Pickup', 'Convenient pickup times for your schedule'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+                
+                // Provider CTA Section - Moved to bottom
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.orange.shade400, Colors.green.shade400],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.orange.shade200,
+                        blurRadius: 15,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: const Icon(Icons.eco, color: Colors.white, size: 24),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: const [
+                                Text(
+                                  'Extra food on hand?',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  'Start selling and reduce waste',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.white70,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () => _showProviderRegistration(context),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: Colors.orange.shade700,
+                            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            elevation: 2,
+                          ),
+                          icon: const Icon(Icons.store_rounded, size: 18),
+                          label: const Text('Register', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFeatureItem(IconData icon, String title, String subtitle) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.green.shade50,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: Colors.green.shade600, size: 16),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModernButton({
+    required VoidCallback onPressed,
+    required String text,
+    required IconData icon,
+    required Color backgroundColor,
+    required Color textColor,
+  }) {
+    return Container(
+      height: 50,
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: backgroundColor.withValues(alpha: 0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          foregroundColor: textColor,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
+        icon: Icon(icon, size: 18),
+        label: Text(text, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
       ),
     );
   }

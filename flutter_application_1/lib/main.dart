@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'firebase_options.dart';
+import 'theme/app_theme.dart';
 import 'features/auth/auth_service.dart';
 import 'services/messaging_service.dart';
 import 'features/welcome/welcome_screen.dart';
@@ -42,40 +43,7 @@ class MealDealApp extends StatelessWidget {
       ],
       child: MaterialApp(
         title: 'MealDeal - Food Surplus Redistribution',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.green,
-            brightness: Brightness.light,
-          ),
-          useMaterial3: true,
-          inputDecorationTheme: InputDecorationTheme(
-            filled: true,
-            fillColor: Colors.white,
-            hintStyle: TextStyle(color: Colors.grey.shade600),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(20),
-              borderSide: BorderSide(color: Colors.grey.shade300),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(20),
-              borderSide: BorderSide(color: Colors.green.shade400, width: 1.5),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(20),
-              borderSide: BorderSide(color: Colors.red.shade300),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(20),
-              borderSide: BorderSide(color: Colors.red.shade400, width: 1.5),
-            ),
-          ),
-          appBarTheme: AppBarTheme(
-            backgroundColor: Colors.green.shade50,
-            foregroundColor: Colors.green.shade800,
-            elevation: 0,
-          ),
-        ),
+        theme: AppTheme.lightTheme,
         home: const MainNavigationScreen(),
         debugShowCheckedModeBanner: false,
       ),

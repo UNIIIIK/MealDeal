@@ -25,84 +25,25 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Messages'),
-        backgroundColor: Colors.green.shade600,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          // Debug button for testing
-          IconButton(
-            icon: const Icon(Icons.bug_report),
-            onPressed: () {
-              _showDebugInfo(context);
-            },
-            tooltip: 'Debug Info',
-          ),
-          StreamBuilder<int>(
-            stream: context.read<MessagingService>().getUnreadMessageCount(),
-            builder: (context, snapshot) {
-              final unreadCount = snapshot.data ?? 0;
-              if (unreadCount > 0) {
-                return Container(
-                  margin: const EdgeInsets.only(right: 16),
-                  child: Stack(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.notifications),
-                        onPressed: () {
-                          // Could show unread messages filter
-                        },
-                      ),
-                      Positioned(
-                        right: 8,
-                        top: 8,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 16,
-                            minHeight: 16,
-                          ),
-                          child: Text(
-                            '$unreadCount',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }
-              return IconButton(
-                icon: const Icon(Icons.notifications_none),
-                onPressed: () {},
-              );
-            },
-          ),
-        ],
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.green.shade50,
-              Colors.white,
-            ],
-          ),
+Widget build(BuildContext context) {
+  return Scaffold(
+    appBar: AppBar(
+      title: const Text('Messages'),
+      backgroundColor: Colors.green.shade600,
+      foregroundColor: Colors.white,
+      elevation: 0,
+    ),
+    body: Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.green.shade50,
+            Colors.white,
+          ],
         ),
+      ),
         child: Column(
           children: [
             // Search bar

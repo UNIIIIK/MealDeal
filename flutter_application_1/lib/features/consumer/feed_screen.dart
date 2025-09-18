@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/animated_food_button.dart';
+import '../../widgets/food_loading_widget.dart';
+import '../../widgets/food_decorative_divider.dart';
 import '../auth/auth_service.dart';
 import '../provider/create_listing_screen.dart';
 import '../provider/notifications_screen.dart';
@@ -64,22 +68,15 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   PreferredSizeWidget _buildAppBar(AuthService authService) {
-    debugPrint('*** BUILDING APP BAR - hasRole(food_provider): ${authService.hasRole('food_provider')} ***');
-    
     if (authService.hasRole('food_provider')) {
-      debugPrint('*** USING PROVIDER APP BAR ***');
       return AppBar(
-        backgroundColor: Colors.green.shade600,
+        backgroundColor: AppTheme.primaryOrange,
         elevation: 0,
-        title: const Text('Home', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text(''),
+        centerTitle: true,
         actions: [
           Consumer<AuthService>(
             builder: (context, authService, child) {
-              debugPrint('*** APP BAR CONSUMER BUILDER CALLED ***');
-              debugPrint('*** ENTERING FOOD PROVIDER SECTION ***');
-              debugPrint('User role detected: ${authService.currentUser?.uid} is a food_provider');
-              debugPrint('Rendering notification bell for provider');
-              
               return Container(
                 margin: const EdgeInsets.only(right: 16),
                 child: StreamBuilder<QuerySnapshot>(
@@ -89,54 +86,53 @@ class _FeedScreenState extends State<FeedScreen> {
                       .where('read', isEqualTo: false)
                       .snapshots(),
                   builder: (context, snap) {
-                    debugPrint('StreamBuilder builder called - ConnectionState: ${snap.connectionState}');
                     final unread = snap.data?.docs.length ?? 0;
-                    debugPrint('Provider ${authService.currentUser!.uid} has $unread unread notifications');
                     
                     return Stack(
                       clipBehavior: Clip.none,
                       children: [
-                        IconButton(
-                          icon: Icon(
-                            Icons.notifications, 
-                            color: unread > 0 ? Colors.yellow : Colors.white,
-                            size: 28,
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          onPressed: () async {
-                            debugPrint('*** NOTIFICATION BELL CLICKED ***');
-                            if (context.mounted) {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => NotificationsScreen(providerId: authService.currentUser!.uid),
-                                ),
-                              );
-                            }
-                          },
+                          child: IconButton(
+                            icon: Icon(
+                              Icons.notifications_outlined, 
+                              color: unread > 0 ? AppTheme.accentYellow : Colors.white,
+                              size: 24,
+                            ),
+                            onPressed: () async {
+                              if (context.mounted) {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => NotificationsScreen(providerId: authService.currentUser!.uid),
+                                  ),
+                                );
+                              }
+                            },
+                          ),
                         ),
                         if (unread > 0)
                           Positioned(
-                            right: 2,
-                            top: 2,
+                            right: 4,
+                            top: 4,
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                               decoration: BoxDecoration(
-                                color: Colors.red,
+                                color: AppTheme.primaryRed,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(color: Colors.white, width: 2),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.3),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
+                                boxShadow: AppTheme.foodShadow,
                               ),
                               child: Text(
                                 '$unread',
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 12,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.bold,
+                                  fontFamily: 'Inter',
                                 ),
                               ),
                             ),
@@ -151,17 +147,11 @@ class _FeedScreenState extends State<FeedScreen> {
         ],
       );
     } else {
-      debugPrint('*** USING CONSUMER APP BAR ***');
       return AppBar(
-        backgroundColor: Colors.green.shade600,
+        backgroundColor: AppTheme.primaryOrange,
         elevation: 0,
-        title: const Text(
-          'Home',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: const Text(''),
+        centerTitle: true,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(
             bottom: Radius.circular(20),
@@ -173,26 +163,26 @@ class _FeedScreenState extends State<FeedScreen> {
               if (authService.hasRole('food_consumer')) {
                 return Container(
                   margin: const EdgeInsets.only(right: 16),
-                  child: IconButton(
-                    icon: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.shopping_cart,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.shopping_cart_outlined,
                         color: Colors.white,
                         size: 24,
                       ),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const CartScreen(),
+                          ),
+                        );
+                      },
                     ),
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const CartScreen(),
-                        ),
-                      );
-                    },
                   ),
                 );
               }
@@ -206,25 +196,31 @@ class _FeedScreenState extends State<FeedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('*** FEED SCREEN BUILD METHOD CALLED ***');
     final authServiceTop = Provider.of<AuthService>(context);
-    debugPrint('*** APP BAR SELECTION - hasRole(food_provider): ${authServiceTop.hasRole('food_provider')} ***');
     return Scaffold(
       floatingActionButton: Consumer<AuthService>(
         builder: (context, authService, child) {
           if (authService.hasRole('food_provider')) {
-            return FloatingActionButton(
-              onPressed: () {
-                // Navigate to create listing
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const CreateListingScreen(),
-                  ),
-                );
-              },
-              backgroundColor: Colors.orange.shade600,
-              foregroundColor: Colors.white,
-              child: const Icon(Icons.add),
+            return Container(
+              decoration: BoxDecoration(
+                gradient: AppTheme.foodGradient,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: AppTheme.foodShadow,
+              ),
+              child: FloatingActionButton(
+                onPressed: () {
+                  // Navigate to create listing
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const CreateListingScreen(),
+                    ),
+                  );
+                },
+                backgroundColor: Colors.transparent,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                child: const Icon(Icons.add, size: 28),
+              ),
             );
           }
           return const SizedBox.shrink();
@@ -237,7 +233,7 @@ class _FeedScreenState extends State<FeedScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Colors.green.shade50,
+              AppTheme.backgroundGray,
               Colors.white,
             ],
           ),
@@ -250,55 +246,47 @@ class _FeedScreenState extends State<FeedScreen> {
                 if (!authService.hasRole('food_consumer')) {
                   return Container(
                     margin: const EdgeInsets.all(16),
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Colors.orange.shade200, Colors.green.shade200],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
+                      gradient: AppTheme.foodGradient,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: AppTheme.cardShadow,
                     ),
                     child: Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.3),
-                            borderRadius: BorderRadius.circular(12),
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(16),
                           ),
-                          child: Icon(
-                            Icons.store,
-                            color: Colors.orange.shade700,
-                            size: 24,
+                          child: const Icon(
+                            Icons.restaurant_menu,
+                            color: Colors.white,
+                            size: 32,
                           ),
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: 20),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                'Welcome!',
+                                'Welcome to MealDeal!',
                                 style: TextStyle(
-                                  fontSize: 20,
+                                  fontSize: 22,
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
+                                  color: Colors.white,
+                                  fontFamily: 'Poppins',
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 8),
                               Text(
-                                'Here are your recently added foods.',
+                                'Manage your food listings and reduce waste',
                                 style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.black87.withValues(alpha: 0.8),
+                                  fontSize: 16,
+                                  color: Colors.white.withOpacity(0.9),
+                                  fontFamily: 'Inter',
                                 ),
                               ),
                             ],
@@ -316,42 +304,37 @@ class _FeedScreenState extends State<FeedScreen> {
                       Container(
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: AppTheme.cardShadow,
                         ),
                         child: TextField(
                           decoration: InputDecoration(
-                            hintText: 'Search for food...',
+                            hintText: 'Search for delicious deals...',
                             hintStyle: TextStyle(
-                              color: Colors.grey.shade400,
+                              color: Colors.grey.shade500,
                               fontSize: 16,
+                              fontFamily: 'Inter',
                             ),
                             prefixIcon: Container(
-                              margin: const EdgeInsets.all(8),
-                              padding: const EdgeInsets.all(8),
+                              margin: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: Colors.green.shade100,
-                                borderRadius: BorderRadius.circular(8),
+                                gradient: AppTheme.freshGradient,
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              child: Icon(
+                              child: const Icon(
                                 Icons.search,
-                                color: Colors.green.shade700,
+                                color: Colors.white,
                                 size: 20,
                               ),
                             ),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(20),
                               borderSide: BorderSide.none,
                             ),
                             filled: true,
                             fillColor: Colors.transparent,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
                           ),
                           onChanged: (value) {
                             setState(() {
@@ -362,6 +345,13 @@ class _FeedScreenState extends State<FeedScreen> {
                       ),
                       const SizedBox(height: 16),
                       
+                      // Decorative divider
+                      const FoodIconDivider(
+                        icon: Icons.restaurant_menu,
+                        iconColor: AppTheme.primaryOrange,
+                        lineColor: AppTheme.lightGray,
+                      ),
+                      
                       // Enhanced filters
                       Row(
                         children: [
@@ -369,45 +359,43 @@ class _FeedScreenState extends State<FeedScreen> {
                             child: Container(
                               decoration: BoxDecoration(
                                 color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.05),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: AppTheme.cardShadow,
                               ),
                               child: DropdownButtonFormField<String>(
                                 value: _selectedCategory,
                                 decoration: InputDecoration(
                                   prefixIcon: Container(
-                                    margin: const EdgeInsets.all(8),
-                                    padding: const EdgeInsets.all(8),
+                                    margin: const EdgeInsets.all(12),
+                                    padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
-                                      color: Colors.blue.shade100,
-                                      borderRadius: BorderRadius.circular(8),
+                                      gradient: AppTheme.warmGradient,
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
-                                    child: Icon(
+                                    child: const Icon(
                                       Icons.category,
-                                      color: Colors.blue.shade700,
-                                      size: 16,
+                                      color: Colors.white,
+                                      size: 18,
                                     ),
                                   ),
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(16),
                                     borderSide: BorderSide.none,
                                   ),
                                   filled: true,
                                   fillColor: Colors.transparent,
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                                 ),
                                 items: _categories.map((category) {
                                   return DropdownMenuItem(
                                     value: category,
                                     child: Text(
                                       category == 'all' ? 'All Categories' : category.toUpperCase(),
-                                      style: const TextStyle(fontSize: 14),
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontFamily: 'Inter',
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
                                   );
                                 }).toList(),
@@ -419,43 +407,37 @@ class _FeedScreenState extends State<FeedScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 16),
                           Expanded(
                             child: Container(
                               decoration: BoxDecoration(
                                 color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.05),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: AppTheme.cardShadow,
                               ),
                               child: DropdownButtonFormField<String>(
                                 value: _sortBy,
                                 decoration: InputDecoration(
                                   prefixIcon: Container(
-                                    margin: const EdgeInsets.all(8),
-                                    padding: const EdgeInsets.all(8),
+                                    margin: const EdgeInsets.all(12),
+                                    padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
-                                      color: Colors.purple.shade100,
-                                      borderRadius: BorderRadius.circular(8),
+                                      gradient: AppTheme.foodGradient,
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
-                                    child: Icon(
+                                    child: const Icon(
                                       Icons.sort,
-                                      color: Colors.purple.shade700,
-                                      size: 16,
+                                      color: Colors.white,
+                                      size: 18,
                                     ),
                                   ),
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(16),
                                     borderSide: BorderSide.none,
                                   ),
                                   filled: true,
                                   fillColor: Colors.transparent,
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                                 ),
                                 items: [
                                   DropdownMenuItem(value: 'created_at', child: Text('Newest First')),
@@ -585,23 +567,10 @@ class _FeedScreenState extends State<FeedScreen> {
                       }
 
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              CircularProgressIndicator(
-                                color: Colors.green.shade600,
-                                strokeWidth: 3,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Loading delicious deals...',
-                                style: TextStyle(
-                                  color: Colors.grey.shade600,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ],
+                        return const Center(
+                          child: FoodLoadingWidget(
+                            message: 'Loading delicious deals...',
+                            size: 60,
                           ),
                         );
                       }
@@ -692,9 +661,9 @@ class _FeedScreenState extends State<FeedScreen> {
                         padding: const EdgeInsets.all(16),
                         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 2,
-                          childAspectRatio: 0.75,
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 16,
+                          childAspectRatio: 0.7,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
                         ),
                         itemCount: filteredListings.length,
                         itemBuilder: (context, index) {
@@ -731,18 +700,18 @@ class _FeedScreenState extends State<FeedScreen> {
     final calculatedDiscount = ((originalPrice - discountedPrice) / originalPrice * 100).round();
     
     return Card(
-      elevation: 8,
-      shadowColor: Colors.black.withValues(alpha: 0.15),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 6,
+      shadowColor: AppTheme.primaryOrange.withOpacity(0.2),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
               Colors.white,
-              Colors.grey.shade50,
+              AppTheme.backgroundGray,
             ],
           ),
         ),
@@ -754,7 +723,7 @@ class _FeedScreenState extends State<FeedScreen> {
               ),
             );
           },
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -762,35 +731,46 @@ class _FeedScreenState extends State<FeedScreen> {
               Stack(
                 children: [
                   Container(
-                    height: 120,
+                    height: 140,
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppTheme.primaryOrange.withOpacity(0.1),
+                          AppTheme.primaryRed.withOpacity(0.1),
+                        ],
+                      ),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                     ),
                     child: ClipRRect(
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                       child: imageUrl != null
                           ? Image.network(
                               imageUrl,
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) {
                                 return Container(
-                                  color: Colors.grey.shade300,
-                                  child: Icon(
-                                    Icons.fastfood,
-                                    size: 40,
-                                    color: Colors.grey.shade600,
+                                  decoration: BoxDecoration(
+                                    gradient: AppTheme.foodGradient,
+                                  ),
+                                  child: const Icon(
+                                    Icons.restaurant,
+                                    size: 48,
+                                    color: Colors.white,
                                   ),
                                 );
                               },
                             )
                           : Container(
-                              color: Colors.grey.shade300,
-                              child: Icon(
-                                Icons.fastfood,
-                                size: 40,
-                                color: Colors.grey.shade600,
+                              decoration: BoxDecoration(
+                                gradient: AppTheme.foodGradient,
+                              ),
+                              child: const Icon(
+                                Icons.restaurant,
+                                size: 48,
+                                color: Colors.white,
                               ),
                             ),
                     ),
@@ -798,38 +778,31 @@ class _FeedScreenState extends State<FeedScreen> {
                   // Enhanced discount badge (only for consumers)
                   if (authService.hasRole('food_consumer'))
                     Positioned(
-                      top: 8,
-                      right: 8,
+                      top: 12,
+                      right: 12,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Colors.red.shade500, Colors.red.shade600],
-                          ),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.2),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
+                          gradient: AppTheme.foodGradient,
+                          borderRadius: BorderRadius.circular(25),
+                          boxShadow: AppTheme.foodShadow,
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.local_offer,
                               color: Colors.white,
-                              size: 14,
+                              size: 16,
                             ),
-                            const SizedBox(width: 4),
+                            const SizedBox(width: 6),
                             Text(
                               '$calculatedDiscount% OFF',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 11,
+                                fontSize: 12,
+                                fontFamily: 'Inter',
                               ),
                             ),
                           ],
@@ -865,21 +838,34 @@ class _FeedScreenState extends State<FeedScreen> {
                   // Quantity badge
                   if (quantity <= 5)
                     Positioned(
-                      top: 8,
-                      left: 8,
+                      top: 12,
+                      left: 12,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.orange.shade600,
-                          borderRadius: BorderRadius.circular(12),
+                          gradient: AppTheme.warmGradient,
+                          borderRadius: BorderRadius.circular(15),
+                          boxShadow: AppTheme.foodShadow,
                         ),
-                        child: Text(
-                          'Only $quantity left!',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 10,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.warning_amber,
+                              color: Colors.white,
+                              size: 14,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Only $quantity left!',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                                fontFamily: 'Inter',
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -888,7 +874,7 @@ class _FeedScreenState extends State<FeedScreen> {
               
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.all(12.0),
+                  padding: const EdgeInsets.all(16.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -896,8 +882,9 @@ class _FeedScreenState extends State<FeedScreen> {
                         title,
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                          color: Colors.black87,
+                          fontSize: 16,
+                          color: AppTheme.darkGray,
+                          fontFamily: 'Poppins',
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -907,52 +894,79 @@ class _FeedScreenState extends State<FeedScreen> {
                       // Price section
                       Row(
                         children: [
-                          Text(
-                            '₱${originalPrice.toStringAsFixed(0)}',
-                            style: const TextStyle(
-                              decoration: TextDecoration.lineThrough,
-                              color: Colors.grey,
-                              fontSize: 12,
+                          Flexible(
+                            child: Text(
+                              '₱${originalPrice.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                decoration: TextDecoration.lineThrough,
+                                color: AppTheme.mediumGray,
+                                fontSize: 13,
+                                fontFamily: 'Inter',
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.green.shade100,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              '₱${discountedPrice.toStringAsFixed(0)}',
-                              style: TextStyle(
-                                color: Colors.green.shade700,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                gradient: AppTheme.freshGradient,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '₱${discountedPrice.toStringAsFixed(0)}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  fontFamily: 'Inter',
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ),
                         ],
                       ),
                       
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       if (description.isNotEmpty)
                         Text(
                           description,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12, color: Colors.black54),
+                          style: const TextStyle(
+                            fontSize: 13, 
+                            color: AppTheme.mediumGray,
+                            fontFamily: 'Inter',
+                            height: 1.3,
+                          ),
                         ),
                       if (expiryTs != null) ...[
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(Icons.schedule, size: 12, color: Colors.red.shade400),
-                            const SizedBox(width: 4),
-                            Text(
-                              _formatExpiry(expiryTs),
-                              style: TextStyle(fontSize: 11, color: Colors.red.shade600, fontWeight: FontWeight.w600),
-                            ),
-                          ],
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryRed.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppTheme.primaryRed.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.schedule, size: 14, color: AppTheme.primaryRed),
+                              const SizedBox(width: 6),
+                              Text(
+                                _formatExpiry(expiryTs),
+                                style: TextStyle(
+                                  fontSize: 12, 
+                                  color: AppTheme.primaryRed, 
+                                  fontWeight: FontWeight.w600,
+                                  fontFamily: 'Inter',
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
 
@@ -963,73 +977,38 @@ class _FeedScreenState extends State<FeedScreen> {
                         Row(
                           children: [
                             Expanded(
-                              child: ElevatedButton(
+                              flex: 1,
+                              child: AnimatedFoodButton(
+                                text: 'Add to Cart',
+                                icon: Icons.add_shopping_cart,
                                 onPressed: () => _addToCart(context, doc, data),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.orange.shade400,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 8),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  elevation: 2,
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.add_shopping_cart, size: 14),
-                                    const SizedBox(width: 4),
-                                    Text('Add to Cart', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                                  ],
-                                ),
+                                gradient: AppTheme.warmGradient,
+                                height: 36,
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 6),
                             Expanded(
-                              child: ElevatedButton(
+                              flex: 1,
+                              child: AnimatedFoodButton(
+                                text: 'Buy Now',
+                                icon: Icons.shopping_bag,
                                 onPressed: () => _buyNow(context, doc, data),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green.shade600,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 8),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  elevation: 2,
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.shopping_bag, size: 14),
-                                    const SizedBox(width: 4),
-                                    Text('Buy Now', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                                  ],
-                                ),
+                                gradient: AppTheme.freshGradient,
+                                height: 36,
                               ),
                             ),
                           ],
                         )
                       else
-                        // Provider view - show delete button
-                        ElevatedButton(
+                        // Provider view - show subtle delete button
+                        AnimatedFoodButton(
+                          text: 'Remove',
+                          icon: Icons.delete_outline,
                           onPressed: () => _deleteListing(context, doc.id),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red.shade500,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            elevation: 2,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.delete, size: 14),
-                              const SizedBox(width: 4),
-                              Text('Delete', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                            ],
-                          ),
+                          backgroundColor: AppTheme.lightGray.withOpacity(0.3),
+                          foregroundColor: AppTheme.mediumGray,
+                          height: 36,
+                          borderRadius: BorderRadius.circular(10),
                         ),
                     ],
                   ),
