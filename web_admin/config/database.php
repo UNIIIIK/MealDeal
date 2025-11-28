@@ -1,8 +1,11 @@
 <?php
 // Firebase/Firestore Configuration
 require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../includes/firestore_rest_adapter.php';
 
 use Google\Cloud\Firestore\FirestoreClient;
+use MealDeal\Admin\Firestore\RestFirestoreClient;
+use GuzzleHttp\Client as GuzzleClient;
 
 class Database {
     private static $instance = null;
@@ -10,25 +13,81 @@ class Database {
 
     private function __construct() {
         try {
-            // Check if credentials file exists
+            // Path to Firebase service account
             $keyPath = __DIR__ . '/firebase-credentials.json';
             if (!file_exists($keyPath)) {
                 throw new Exception('Firebase credentials file not found at: ' . $keyPath);
             }
-            
-            // Validate JSON structure
+
+            // Validate credentials JSON
             $keyData = json_decode(file_get_contents($keyPath), true);
             if (json_last_error() !== JSON_ERROR_NONE) {
                 throw new Exception('Invalid JSON in credentials file: ' . json_last_error_msg());
             }
-            
-            // Initialize Firestore client with error handling
-            $this->firestore = new FirestoreClient([
-                'projectId' => 'mealdeal-10385',
-                'keyFilePath' => $keyPath,
-                'retries' => 1, // Limit retries to prevent infinite loops
-                'timeout' => 10 // 10 second timeout
-            ]);
+
+            $transportOverride = getenv('MEALDEAL_FIRESTORE_TRANSPORT');
+            $preferGrpc = PHP_OS_FAMILY !== 'Windows';
+            $preferRest = false;
+            if ($transportOverride) {
+                $transportOverride = strtolower($transportOverride);
+                if ($transportOverride === 'rest') {
+                    $preferGrpc = false;
+                    $preferRest = true;
+                } elseif ($transportOverride === 'grpc') {
+                    $preferGrpc = true;
+                    $preferRest = false;
+                }
+            }
+
+            $timeoutOverride = getenv('MEALDEAL_FIRESTORE_TIMEOUT');
+            $timeoutSeconds = is_numeric($timeoutOverride)
+                ? max(5, (int)$timeoutOverride)
+                : 10;
+
+            // Build a shared Guzzle client to inject into RestFirestoreClient
+            $guzzleOptions = [
+                'timeout' => $timeoutSeconds,
+                'connect_timeout' => 3,
+                // read_timeout set for explicitness (some transports honor it)
+                'read_timeout' => 5,
+            ];
+
+            $guzzleClient = new GuzzleClient($guzzleOptions);
+
+            $transportErrors = [];
+
+            // Try gRPC if desired and available
+            if ($preferGrpc && !$preferRest) {
+                try {
+                    $this->firestore = new FirestoreClient([
+                        'projectId' => 'mealdeal-10385',
+                        'keyFilePath' => $keyPath,
+                        'retries' => 0,
+                        'timeout' => $timeoutSeconds
+                    ]);
+                    return;
+                } catch (Exception $grpcException) {
+                    $transportErrors[] = 'gRPC: ' . $grpcException->getMessage();
+                    // fall back to REST
+                }
+            }
+
+            try {
+                // Use our REST adapter, inject the httpClient for robust timeouts
+                $this->firestore = new RestFirestoreClient([
+                    'projectId'   => 'mealdeal-10385',
+                    'keyFilePath' => $keyPath,
+                    'timeout'     => $timeoutSeconds,
+                    'httpClient'  => $guzzleClient,
+                    // optional explicit smaller timeouts passed through if needed
+                    'connect_timeout' => 3,
+                    'read_timeout'    => 5,
+                ]);
+            } catch (Exception $restException) {
+                $transportErrors[] = 'REST: ' . $restException->getMessage();
+                $details = implode('; ', $transportErrors);
+                throw new Exception('Database connection failed: ' . $details);
+            }
         } catch (Exception $e) {
             error_log('Firestore initialization failed: ' . $e->getMessage());
             throw new Exception('Database connection failed: ' . $e->getMessage());
@@ -45,39 +104,7 @@ class Database {
     public function getFirestore() {
         return $this->firestore;
     }
-
-    // Helper methods for common operations
-    public function getCollection($collectionName) {
-        return $this->firestore->collection($collectionName);
-    }
-
-    public function getDocument($collectionName, $documentId) {
-        return $this->firestore->collection($collectionName)->document($documentId);
-    }
-
-    public function addDocument($collectionName, $data) {
-        return $this->firestore->collection($collectionName)->add($data);
-    }
-
-    public function updateDocument($collectionName, $documentId, $data) {
-        return $this->firestore->collection($collectionName)->document($documentId)->set($data, ['merge' => true]);
-    }
-
-    public function deleteDocument($collectionName, $documentId) {
-        return $this->firestore->collection($collectionName)->document($documentId)->delete();
-    }
-
-    public function queryCollection($collectionName, $conditions = []) {
-        $query = $this->firestore->collection($collectionName);
-        
-        foreach ($conditions as $condition) {
-            $query = $query->where($condition['field'], $condition['operator'], $condition['value']);
-        }
-        
-        return $query;
-    }
 }
 
-// Global database instance
-$db = Database::getInstance();
-?>
+// Global Firestore client (not the wrapper itself)
+$db = Database::getInstance()->getFirestore();

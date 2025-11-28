@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // Script to create an admin account for testing
 require_once 'config/database.php';
 
@@ -9,8 +9,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     if ($name && $email && $password) {
         try {
-            $db = Database::getInstance();
-            $adminsRef = $db->getCollection('admins');
+            $db = Database::getInstance()->getFirestore();
+            $adminsRef = $db->collection('admins');
             
             // Check if admin already exists
             $existingAdmin = $adminsRef->where('email', '=', $email)->documents();
@@ -87,3 +87,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 </body>
 </html>
+

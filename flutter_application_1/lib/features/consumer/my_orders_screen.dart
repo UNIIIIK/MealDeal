@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../auth/auth_service.dart';
 import 'pickup_route_screen.dart';
+import 'dart:convert';
+
 
 class MyOrdersScreen extends StatefulWidget {
   const MyOrdersScreen({super.key, this.initialFilter});
@@ -216,7 +218,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(8),
                         image: DecorationImage(
-                          image: NetworkImage(item['image']),
+                          image: buildImageProvider(item['image']),
                           fit: BoxFit.cover,
                         ),
                       ),
@@ -500,4 +502,16 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
       }
     }
   }
+  ImageProvider buildImageProvider(String imageData) {
+  if (imageData.startsWith('data:image')) {
+    // Handle base64
+    final cleanBase64 = imageData.split(',').last;
+    final bytes = base64Decode(cleanBase64);
+    return MemoryImage(bytes);
+  } else {
+    // Handle normal URL
+    return NetworkImage(imageData);
+  }
+}
+
 }

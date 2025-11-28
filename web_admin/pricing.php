@@ -14,6 +14,15 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
     <link href="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.css" rel="stylesheet">
     <link href="assets/css/admin.css" rel="stylesheet">
     <style>
+        .badge-other {
+    background-color: #0d6efd;   /* Blue background */
+    color: white;                /* White text */
+    font-weight: bold;
+    border: 2px solid #000080;
+    box-shadow: 1px 1px 3px rgba(0,0,0,0.3);
+}
+
+
         .compliance-card {
             background: white;
             border-radius: 10px;
@@ -37,7 +46,15 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
         .pricing-info {
             display: flex;
             gap: 1rem;
-            align-items: center;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+        .pricing-values {
+            min-width: 180px;
+        }
+        .pricing-values strong {
+            display: inline-block;
+            width: 95px;
         }
         .price-comparison {
             background: #f8f9fa;
@@ -60,6 +77,10 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
         .discount-badge.warning {
             background-color: #fff3cd;
             color: #856404;
+        }
+        .listing-description {
+            white-space: normal;
+            word-break: break-word;
         }
         .stats-card {
             background: linear-gradient(135deg, #28a745, #20c997);
@@ -99,22 +120,66 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
     </style>
 </head>
 <body>
+    <!-- Navigation (consistent with sidebar layout) -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-success">
         <div class="container-fluid">
-            <a class="navbar-brand" href="index.php">MealDeal Super Admin</a>
+            <a class="navbar-brand" href="index.php">
+                MealDeal Super Admin
+            </a>
             <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="dashboard.php">Dashboard</a>
-                <a class="nav-link" href="users.php">Users</a>
-                <a class="nav-link" href="listings.php">Moderation</a>
-                <a class="nav-link" href="reports.php">Reports</a>
-                <a class="nav-link active" href="pricing.php">Pricing</a>
-                <a class="nav-link" href="impact.php">Impact</a>
                 <a class="nav-link" href="logout.php">Logout</a>
             </div>
         </div>
     </nav>
 
-    <div class="container py-4">
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-3 col-lg-2 d-md-block bg-light sidebar">
+                <div class="position-sticky pt-3">
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="index.php">
+                                <i class="bi bi-speedometer2 me-2"></i>Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="reports.php">
+                                <i class="bi bi-flag me-2"></i>Reports
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="users.php">
+                                <i class="bi bi-people me-2"></i>User Management
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="listings.php">
+                                <i class="bi bi-card-checklist me-2"></i>Content Moderation
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="leaderboard.php">
+                                <i class="bi bi-trophy me-2"></i>Leaderboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="impact.php">
+                                <i class="bi bi-graph-up me-2"></i>Impact Tracking
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="pricing.php">
+                                <i class="bi bi-tags me-2"></i>Pricing Control
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Main content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+    <div class="py-4">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1 class="h3 mb-0">Pricing & Market Compliance</h1>
             <div>
@@ -315,6 +380,9 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
             </div>
         </div>
     </div>
+            </main>
+        </div>
+    </div>
 
     <!-- Listing Details Modal -->
     <div class="modal fade" id="listingDetailsModal" tabindex="-1">
@@ -337,18 +405,36 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.js"></script>
+    <!-- Use UMD build so Chart is available on window.Chart in non-module scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
         let allListings = [];
         let selectedListings = new Set();
         let discountChart, complianceChart;
+        let pesoFormatter;
 
         // Load data on page load
         document.addEventListener('DOMContentLoaded', function() {
+            try {
+                pesoFormatter = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
+            } catch (error) {
+                pesoFormatter = null;
+            }
             loadPricingData();
             loadPricingAlerts();
             setupEventListeners();
         });
+
+        function formatCurrency(amount) {
+            const value = Number(amount);
+            if (!Number.isFinite(value)) {
+                return '₱0.00';
+            }
+            if (pesoFormatter) {
+                return pesoFormatter.format(value);
+            }
+            return '₱' + value.toFixed(2);
+        }
 
         function setupEventListeners() {
             document.getElementById('searchListings').addEventListener('input', filterListings);
@@ -360,10 +446,13 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
 
         async function loadPricingData() {
             try {
-                const response = await fetch('api/get_listings.php?limit=100');
+                const response = await fetch('api/get_listings.php?limit=50'); // Reduced from 100 to 50
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
                 const data = await response.json();
                 
-                if (data.success) {
+                if (data.success && Array.isArray(data.data) && data.data.length > 0) {
                     allListings = data.data.map(listing => {
                         // Calculate discount percentage
                         const originalPrice = parseFloat(listing.original_price) || 0;
@@ -381,6 +470,8 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
                         
                         return {
                             ...listing,
+                            original_price: originalPrice,
+                            discounted_price: discountedPrice,
                             discount_percentage: discountPercentage,
                             compliance_status: complianceStatus,
                             price_violation: discountPercentage < 50 ? 1 : 0
@@ -390,11 +481,18 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
                     displayListings(allListings);
                     updateComplianceStats(allListings);
                     initializeCharts(allListings);
+                } else {
+                    throw new Error('No pricing data returned from API');
                 }
             } catch (error) {
                 console.error('Error loading pricing data:', error);
-                document.getElementById('listingsList').innerHTML = 
-                    '<div class="alert alert-danger">Failed to load pricing data.</div>';
+                document.getElementById('listingsList').innerHTML =
+                    '<div class="alert alert-danger">Failed to load pricing data from Firestore. Please try again later.</div>';
+                // Reset stats to safe zeros
+                document.getElementById('totalListings').textContent = '0';
+                document.getElementById('compliantListings').textContent = '0';
+                document.getElementById('violations').textContent = '0';
+                document.getElementById('averageDiscount').textContent = '0%';
             }
         }
 
@@ -403,13 +501,15 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
                 const response = await fetch('api/get_pricing_alerts.php');
                 const data = await response.json();
                 
-                if (data.success) {
+                if (data.success && Array.isArray(data.data) && data.data.length > 0) {
                     displayPricingAlerts(data.data);
+                } else {
+                    displayPricingAlerts([]);
                 }
             } catch (error) {
                 console.error('Error loading pricing alerts:', error);
-                document.getElementById('pricingAlerts').innerHTML = 
-                    '<div class="alert alert-warning">Failed to load pricing alerts.</div>';
+                document.getElementById('pricingAlerts').innerHTML =
+                    '<div class="alert alert-warning">Failed to load pricing alerts from Firestore.</div>';
             }
         }
 
@@ -429,14 +529,14 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
                         </div>
                         <div class="col-md-3">
                             <h6 class="mb-1">${listing.title}</h6>
-                            <p class="small text-muted mb-1">${listing.description.substring(0, 80)}...</p>
-                            <span class="badge bg-${getCategoryColor(listing.category)}">${listing.category}</span>
+                            <p class="small text-muted mb-1 listing-description">${listing.description || 'No description provided yet.'}</p>
+                            <span class="badge ${listing.category === 'Other' ? 'badge-other' : 'bg-' + getCategoryColor(listing.category)}">${listing.category}</span>
                         </div>
                         <div class="col-md-4">
                             <div class="pricing-info">
-                                <div>
-                                    <strong>Original:</strong> $${listing.original_price}<br>
-                                    <strong>Discounted:</strong> $${listing.discounted_price}
+                                <div class="pricing-values">
+                                    <div><strong>Original:</strong> ${formatCurrency(listing.original_price)}</div>
+                                    <div><strong>Discounted:</strong> ${formatCurrency(listing.discounted_price)}</div>
                                 </div>
                                 <div class="price-comparison">
                                     <div class="discount-badge ${listing.compliance_status}">
@@ -640,6 +740,7 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
                 case 'dessert': return 'warning';
                 case 'beverage': return 'info';
                 case 'pickup': return 'secondary';
+                case 'Other': return 'other';
                 default: return 'light';
             }
         }
@@ -674,14 +775,18 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
                             <h6>Listing Information</h6>
                             <p><strong>Title:</strong> ${listing.title}</p>
                             <p><strong>Description:</strong> ${listing.description}</p>
-                            <p><strong>Category:</strong> <span class="badge bg-${getCategoryColor(listing.category)}">${listing.category}</span></p>
+                            <p><strong>Category:</strong> 
+                            <span class="${listing.category === 'Other' ? 'badge-other' : 'badge bg-' + getCategoryColor(listing.category)}">
+                             ${listing.category}
+                            </span>
+                            </p>
                             <p><strong>Quantity:</strong> ${listing.quantity}</p>
                         </div>
                         <div class="col-md-6">
                             <h6>Pricing Details</h6>
                             <div class="price-comparison">
-                                <p><strong>Original Price:</strong> $${listing.original_price}</p>
-                                <p><strong>Discounted Price:</strong> $${listing.discounted_price}</p>
+                                <p><strong>Original Price:</strong> ${formatCurrency(listing.original_price)}</p>
+                                <p><strong>Discounted Price:</strong> ${formatCurrency(listing.discounted_price)}</p>
                                 <p><strong>Discount Percentage:</strong> ${listing.discount_percentage}%</p>
                                 <p><strong>Compliance Status:</strong> 
                                     <span class="badge bg-${listing.compliance_status === 'compliant' ? 'success' : listing.compliance_status === 'warning' ? 'warning' : 'danger'}">
@@ -697,24 +802,18 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
         }
 
         function approveListing(listingId) {
-            if (confirm('Are you sure you want to approve this listing?')) {
-                console.log('Approving listing:', listingId);
-                loadPricingData();
-            }
+            console.log('Approving listing:', listingId);
+            loadPricingData();
         }
 
         function flagListing(listingId) {
-            if (confirm('Are you sure you want to flag this listing for review?')) {
-                console.log('Flagging listing:', listingId);
-                loadPricingData();
-            }
+            console.log('Flagging listing:', listingId);
+            loadPricingData();
         }
 
         function rejectListing(listingId) {
-            if (confirm('Are you sure you want to reject this listing?')) {
-                console.log('Rejecting listing:', listingId);
-                loadPricingData();
-            }
+            console.log('Rejecting listing:', listingId);
+            loadPricingData();
         }
 
         function bulkApproveCompliant() {

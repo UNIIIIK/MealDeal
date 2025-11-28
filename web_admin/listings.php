@@ -11,6 +11,7 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
     <title>Content Moderation - MealDeal Admin</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="assets/css/admin.css" rel="stylesheet">
     <style>
         .listing-card {
@@ -81,183 +82,218 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-success">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="index.php">MealDeal Super Admin</a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="dashboard.php">Dashboard</a>
-                <a class="nav-link" href="users.php">Users</a>
-                <a class="nav-link active" href="listings.php">Moderation</a>
-                <a class="nav-link" href="reports.php">Reports</a>
-                <a class="nav-link" href="pricing.php">Pricing</a>
-                <a class="nav-link" href="impact.php">Impact</a>
-                <a class="nav-link" href="logout.php">Logout</a>
-            </div>
-        </div>
-    </nav>
+    <?php include 'partials/header.php'; ?>
 
-    <div class="container py-4">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1 class="h3 mb-0">Content Moderation</h1>
-            <div>
-                <button class="btn btn-success me-2" onclick="refreshListings()">
-                    <i class="bi bi-arrow-clockwise"></i> Refresh
-                </button>
-                <button class="btn btn-warning" onclick="runAutomatedScan()">
-                    <i class="bi bi-robot"></i> Run AI Scan
-                </button>
-            </div>
-        </div>
-
-        <!-- Moderation Statistics -->
-        <div class="stats-card">
-            <div class="row">
-                <div class="col-md-3">
-                    <div class="text-center">
-                        <h3 id="totalListings">-</h3>
-                        <p class="mb-0">Total Listings</p>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="text-center">
-                        <h3 id="pendingReview">-</h3>
-                        <p class="mb-0">Pending Review</p>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="text-center">
-                        <h3 id="flaggedListings">-</h3>
-                        <p class="mb-0">Flagged Listings</p>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="text-center">
-                        <h3 id="aiFlags">-</h3>
-                        <p class="mb-0">AI Detected Issues</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Filters and Search -->
-        <div class="row mb-4">
-            <div class="col-md-3">
-                <input type="text" class="form-control" id="searchListings" placeholder="Search listings...">
-            </div>
-            <div class="col-md-2">
-                <select class="form-select" id="filterStatus">
-                    <option value="">All Status</option>
-                    <option value="pending">Pending Review</option>
-                    <option value="approved">Approved</option>
-                    <option value="flagged">Flagged</option>
-                    <option value="rejected">Rejected</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <select class="form-select" id="filterPriority">
-                    <option value="">All Priority</option>
-                    <option value="high">High Priority</option>
-                    <option value="medium">Medium Priority</option>
-                    <option value="low">Low Priority</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <select class="form-select" id="filterCategory">
-                    <option value="">All Categories</option>
-                    <option value="main_dish">Main Dishes</option>
-                    <option value="side_dish">Side Dishes</option>
-                    <option value="dessert">Desserts</option>
-                    <option value="beverage">Beverages</option>
-                    <option value="pickup">Pickup Items</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <select class="form-select" id="sortBy">
-                    <option value="created_at">Sort by Date</option>
-                    <option value="priority">Sort by Priority</option>
-                    <option value="quality_score">Sort by Quality</option>
-                    <option value="reports">Sort by Reports</option>
-                </select>
-            </div>
-            <div class="col-md-1">
-                <button class="btn btn-outline-secondary w-100" onclick="clearFilters()">
-                    <i class="bi bi-x-circle"></i>
-                </button>
-            </div>
-        </div>
-
+    <div class="container-fluid">
         <div class="row">
-            <!-- Listings Review Panel -->
-            <div class="col-lg-8">
-                <div id="listingsList">
-                    <div class="text-center py-5">
-                        <div class="spinner-border text-success" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
-                        <p class="mt-2">Loading listings for review...</p>
-                    </div>
+            <nav class="col-md-3 col-lg-2 d-md-block bg-light sidebar">
+                <div class="position-sticky pt-3">
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="index.php">
+                                <i class="bi bi-speedometer2 me-2"></i>Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="reports.php">
+                                <i class="bi bi-flag me-2"></i>Reports
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="users.php">
+                                <i class="bi bi-people me-2"></i>User Management
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="listings.php">
+                                <i class="bi bi-card-checklist me-2"></i>Content Moderation
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="leaderboard.php">
+                                <i class="bi bi-trophy me-2"></i>Leaderboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="impact.php">
+                                <i class="bi bi-graph-up me-2"></i>Impact Tracking
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="pricing.php">
+                                <i class="bi bi-tags me-2"></i>Pricing Control
+                            </a>
+                        </li>
+                    </ul>
                 </div>
-            </div>
+            </nav>
 
-            <!-- Moderation Tools Panel -->
-            <div class="col-lg-4">
-                <!-- AI Analysis Results -->
-                <div class="card">
-                    <div class="card-header bg-info text-white">
-                        <h5 class="mb-0"><i class="bi bi-robot"></i> AI Analysis</h5>
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+                <div class="py-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h1 class="h3 mb-0">Content Moderation</h1>
+                        <div>
+                            <button class="btn btn-success me-2" onclick="refreshListings()">
+                                <i class="bi bi-arrow-clockwise"></i> Refresh
+                            </button>
+                            <button class="btn btn-warning" onclick="runAutomatedScan()">
+                                <i class="bi bi-robot"></i> Run AI Scan
+                            </button>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <div id="aiAnalysisResults">
-                            <div class="text-center py-3">
-                                <div class="spinner-border text-info" role="status">
-                                    <span class="visually-hidden">Loading...</span>
+
+                    <!-- Moderation Statistics -->
+                    <div class="stats-card">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <h3 id="totalListings">-</h3>
+                                    <p class="mb-0">Total Listings</p>
                                 </div>
-                                <p class="mt-2 small">Running AI analysis...</p>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <h3 id="pendingReview">-</h3>
+                                    <p class="mb-0">Pending Review</p>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <h3 id="flaggedListings">-</h3>
+                                    <p class="mb-0">Flagged Listings</p>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <h3 id="aiFlags">-</h3>
+                                    <p class="mb-0">AI Detected Issues</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filters and Search -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <input type="text" class="form-control" id="searchListings" placeholder="Search listings...">
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select" id="filterStatus">
+                                <option value="">All Status</option>
+                                <option value="pending">Pending Review</option>
+                                <option value="approved">Approved</option>
+                                <option value="flagged">Flagged</option>
+                                <option value="rejected">Rejected</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select" id="filterPriority">
+                                <option value="">All Priority</option>
+                                <option value="high">High Priority</option>
+                                <option value="medium">Medium Priority</option>
+                                <option value="low">Low Priority</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select" id="filterCategory">
+                                <option value="">All Categories</option>
+                                <option value="main_dish">Main Dishes</option>
+                                <option value="side_dish">Side Dishes</option>
+                                <option value="dessert">Desserts</option>
+                                <option value="beverage">Beverages</option>
+                                <option value="pickup">Pickup Items</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select" id="sortBy">
+                                <option value="created_at">Sort by Date</option>
+                                <option value="priority">Sort by Priority</option>
+                                <option value="quality_score">Sort by Quality</option>
+                                <option value="reports">Sort by Reports</option>
+                            </select>
+                        </div>
+                        <div class="col-md-1">
+                            <button class="btn btn-outline-secondary w-100" onclick="clearFilters()">
+                                <i class="bi bi-x-circle"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <!-- Listings Review Panel -->
+                        <div class="col-lg-8">
+                            <div id="listingsList">
+                                <div class="text-center py-5">
+                                    <div class="spinner-border text-success" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="mt-2">Loading listings for review...</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Moderation Tools Panel -->
+                        <div class="col-lg-4">
+                            <!-- AI Analysis Results -->
+                            <div class="card">
+                                <div class="card-header bg-info text-white">
+                                    <h5 class="mb-0"><i class="bi bi-robot"></i> AI Analysis</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="aiAnalysisResults">
+                                        <div class="text-center py-3">
+                                            <div class="spinner-border text-info" role="status">
+                                                <span class="visually-hidden">Loading...</span>
+                                            </div>
+                                            <p class="mt-2 small">Running AI analysis...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Recent Flags -->
+                            <div class="card mt-3">
+                                <div class="card-header bg-warning text-dark">
+                                    <h5 class="mb-0"><i class="bi bi-flag"></i> Recent Flags</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="recentFlags">
+                                        <div class="text-center py-3">
+                                            <div class="spinner-border text-warning" role="status">
+                                                <span class="visually-hidden">Loading...</span>
+                                            </div>
+                                            <p class="mt-2 small">Loading flags...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Quick Actions -->
+                            <div class="card mt-3">
+                                <div class="card-header bg-primary text-white">
+                                    <h5 class="mb-0"><i class="bi bi-lightning"></i> Quick Actions</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="d-grid gap-2">
+                                        <button class="btn btn-outline-success" onclick="bulkApproveListings()">
+                                            <i class="bi bi-check-circle"></i> Bulk Approve Selected
+                                        </button>
+                                        <button class="btn btn-outline-danger" onclick="bulkRejectListings()">
+                                            <i class="bi bi-x-circle"></i> Bulk Reject Selected
+                                        </button>
+                                        <button class="btn btn-outline-warning" onclick="bulkFlagListings()">
+                                            <i class="bi bi-flag"></i> Bulk Flag Selected
+                                        </button>
+                                        <button class="btn btn-outline-info" onclick="exportModerationReport()">
+                                            <i class="bi bi-download"></i> Export Report
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-
-                <!-- Recent Flags -->
-                <div class="card mt-3">
-                    <div class="card-header bg-warning text-dark">
-                        <h5 class="mb-0"><i class="bi bi-flag"></i> Recent Flags</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="recentFlags">
-                            <div class="text-center py-3">
-                                <div class="spinner-border text-warning" role="status">
-                                    <span class="visually-hidden">Loading...</span>
-                                </div>
-                                <p class="mt-2 small">Loading flags...</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Quick Actions -->
-                <div class="card mt-3">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0"><i class="bi bi-lightning"></i> Quick Actions</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="d-grid gap-2">
-                            <button class="btn btn-outline-success" onclick="bulkApproveListings()">
-                                <i class="bi bi-check-circle"></i> Bulk Approve Selected
-                            </button>
-                            <button class="btn btn-outline-danger" onclick="bulkRejectListings()">
-                                <i class="bi bi-x-circle"></i> Bulk Reject Selected
-                            </button>
-                            <button class="btn btn-outline-warning" onclick="bulkFlagListings()">
-                                <i class="bi bi-flag"></i> Bulk Flag Selected
-                            </button>
-                            <button class="btn btn-outline-info" onclick="exportModerationReport()">
-                                <i class="bi bi-download"></i> Export Report
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            </main>
         </div>
     </div>
 
@@ -374,8 +410,8 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
                         <div class="col-md-4">
                             <h6 class="mb-1">${listing.title}</h6>
                             <p class="small text-muted mb-1">${listing.description.substring(0, 100)}...</p>
-                            <span class="badge bg-${getCategoryColor(listing.category)}">${listing.category}</span>
-                            <span class="badge bg-${getStatusColor(listing.status)} ms-1">${listing.status}</span>
+                            <span class="badge bg-${getCategoryColor(listing.category)}">${listing.category || 'other'}</span>
+                            <span class="badge bg-${getStatusColor(listing.status)} ms-1">${listing.status || 'active'}</span>
                         </div>
                         <div class="col-md-2">
                             <div class="text-center">
@@ -559,7 +595,8 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
                 case 'dessert': return 'warning';
                 case 'beverage': return 'info';
                 case 'pickup': return 'secondary';
-                default: return 'light';
+                case 'other': return 'dark';
+                default: return 'dark';
             }
         }
 
@@ -568,8 +605,9 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
                 case 'approved': return 'success';
                 case 'flagged': return 'danger';
                 case 'pending': return 'warning';
+                case 'active': return 'primary';
                 case 'rejected': return 'secondary';
-                default: return 'light';
+                default: return 'primary';
             }
         }
 
@@ -631,27 +669,21 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
         }
 
         function approveListing(listingId) {
-            if (confirm('Are you sure you want to approve this listing?')) {
-                // Implement approve listing API call
+            // Implement approve listing API call (non-blocking)
                 console.log('Approving listing:', listingId);
                 loadListings();
-            }
         }
 
         function rejectListing(listingId) {
-            if (confirm('Are you sure you want to reject this listing?')) {
-                // Implement reject listing API call
+            // Implement reject listing API call (non-blocking)
                 console.log('Rejecting listing:', listingId);
                 loadListings();
-            }
         }
 
         function flagListing(listingId) {
-            if (confirm('Are you sure you want to flag this listing for review?')) {
-                // Implement flag listing API call
+            // Implement flag listing API call (non-blocking)
                 console.log('Flagging listing:', listingId);
                 loadListings();
-            }
         }
 
         function bulkApproveListings() {
@@ -660,12 +692,10 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
                 return;
             }
             
-            if (confirm(`Are you sure you want to approve ${selectedListings.size} selected listings?`)) {
                 // Implement bulk approve API call
                 console.log('Bulk approving listings:', Array.from(selectedListings));
                 selectedListings.clear();
                 loadListings();
-            }
         }
 
         function bulkRejectListings() {
@@ -674,12 +704,10 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
                 return;
             }
             
-            if (confirm(`Are you sure you want to reject ${selectedListings.size} selected listings?`)) {
                 // Implement bulk reject API call
                 console.log('Bulk rejecting listings:', Array.from(selectedListings));
                 selectedListings.clear();
                 loadListings();
-            }
         }
 
         function bulkFlagListings() {
@@ -688,12 +716,10 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
                 return;
             }
             
-            if (confirm(`Are you sure you want to flag ${selectedListings.size} selected listings?`)) {
                 // Implement bulk flag API call
                 console.log('Bulk flagging listings:', Array.from(selectedListings));
                 selectedListings.clear();
                 loadListings();
-            }
         }
 
         function runAutomatedScan() {

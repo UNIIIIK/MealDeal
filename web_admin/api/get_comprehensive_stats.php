@@ -1,4 +1,6 @@
 <?php
+//get_comprehensive_stats.php
+
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET');
@@ -31,13 +33,26 @@ if (!function_exists('formatTimestamp')) {
 try {
     // Set a reasonable timeout for API calls
     set_time_limit(30);
-    
+
+    // Simple file-based micro-cache (60 seconds)
+    $cacheFile = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'md_comprehensive_stats_cache.json';
+    $cacheTtlSeconds = 60;
+    if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $cacheTtlSeconds) {
+        $cached = @file_get_contents($cacheFile);
+        if ($cached) {
+            header('X-Cache: HIT');
+            echo $cached;
+            exit;
+        }
+    }
+
     // Load stats with better error handling
     $stats = [
         'users' => ['total_users' => 0, 'providers' => 0, 'consumers' => 0, 'verified_users' => 0, 'recent_signups' => 0],
         'listings' => ['active_listings' => 0, 'total_revenue' => 0],
         'orders' => ['total_food_saved' => 0, 'total_savings' => 0, 'total_orders' => 0, 'completed_orders' => 0, 'average_order_value' => 0],
         'reports' => ['pending_reports' => 0, 'total_reports' => 0, 'recent_reports' => []],
+        'leaderboard' => ['providers' => [], 'consumers' => []],
         'top_providers' => []
     ];
     
@@ -65,12 +80,33 @@ try {
     } catch (Exception $e) {
         error_log("Error loading report stats: " . $e->getMessage());
     }
+
+    try {
+        // Top providers (all‑time, Firestore aggregates)
+        $stats['leaderboard']['providers'] = getTopProviders(10);
+    } catch (Exception $e) {
+        error_log("Error loading provider leaderboard: " . $e->getMessage());
+        $stats['leaderboard']['providers'] = [];
+    }
+
+    try {
+        // Top consumers (all‑time, Firestore aggregates)
+        $stats['leaderboard']['consumers'] = getTopConsumers(10);
+    } catch (Exception $e) {
+        error_log("Error loading consumer leaderboard: " . $e->getMessage());
+        $stats['leaderboard']['consumers'] = [];
+    }
     
-    echo json_encode([
+    $responseJson = json_encode([
         'success' => true,
         'data' => $stats,
         'timestamp' => date('Y-m-d H:i:s')
     ]);
+
+    // Save to cache best-effort
+    @file_put_contents($cacheFile, $responseJson);
+
+    echo $responseJson;
 } catch (Exception $e) {
     http_response_code(500);
     echo json_encode([

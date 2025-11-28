@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET');
@@ -13,8 +13,8 @@ try {
         throw new Exception('Report ID is required');
     }
     
-    $db = Database::getInstance();
-    $reportDoc = $db->getDocument('reports', $reportId);
+    $db = Database::getInstance()->getFirestore();
+    $reportDoc = $db->collection('reports')->document($reportId);
     $reportData = $reportDoc->snapshot()->data();
     
     if (!$reportDoc->snapshot()->exists()) {
@@ -27,7 +27,7 @@ try {
     
     try {
         if (!$reporterName && isset($reportData['reporter_id'])) {
-            $uSnap = $db->getDocument('users', $reportData['reporter_id'])->snapshot();
+            $uSnap = $db->collection('users')->document($reportData['reporter_id'])->snapshot();
             if ($uSnap->exists()) {
                 $uData = $uSnap->data();
                 $reporterName = $uData['name'] ?? ($uData['email'] ?? 'Anonymous');
@@ -35,27 +35,27 @@ try {
         }
         
         if (!$targetName && isset($reportData['target_user_id'])) {
-            $tSnap = $db->getDocument('users', $reportData['target_user_id'])->snapshot();
+            $tSnap = $db->collection('users')->document($reportData['target_user_id'])->snapshot();
             if ($tSnap->exists()) {
                 $tData = $tSnap->data();
-                $targetName = $tData['name'] ?? ($tData['email'] ?? '—');
+                $targetName = $tData['name'] ?? ($tData['email'] ?? 'â€”');
             }
         }
         
         // If this report targets a listing, use listing title/provider
         if (!$targetName && isset($reportData['target_listing_id'])) {
-            $lSnap = $db->getDocument('listings', $reportData['target_listing_id'])->snapshot();
+            $lSnap = $db->collection('listings')->document($reportData['target_listing_id'])->snapshot();
             if ($lSnap->exists()) {
                 $lData = $lSnap->data();
                 $targetName = $lData['title'] ?? ($lData['name'] ?? 'Listing');
                 // Optional: append provider name if available
                 if (isset($lData['provider_id'])) {
-                    $pSnap = $db->getDocument('users', $lData['provider_id'])->snapshot();
+                    $pSnap = $db->collection('users')->document($lData['provider_id'])->snapshot();
                     if ($pSnap->exists()) {
                         $pData = $pSnap->data();
                         $providerName = $pData['name'] ?? ($pData['email'] ?? null);
                         if ($providerName) {
-                            $targetName .= ' • ' . $providerName;
+                            $targetName .= ' â€¢ ' . $providerName;
                         }
                     }
                 }
@@ -63,10 +63,10 @@ try {
         }
         // Alternate schema: provider_id directly on report
         if (!$targetName && isset($reportData['provider_id'])) {
-            $pSnap = $db->getDocument('users', $reportData['provider_id'])->snapshot();
+            $pSnap = $db->collection('users')->document($reportData['provider_id'])->snapshot();
             if ($pSnap->exists()) {
                 $pData = $pSnap->data();
-                $targetName = ($reportData['listing_title'] ?? 'Listing') . ' • ' . ($pData['name'] ?? ($pData['email'] ?? 'Provider'));
+                $targetName = ($reportData['listing_title'] ?? 'Listing') . ' â€¢ ' . ($pData['name'] ?? ($pData['email'] ?? 'Provider'));
             }
         }
     } catch (Exception $e) {

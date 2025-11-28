@@ -1,14 +1,14 @@
-<?php
+﻿<?php
 session_start();
 require_once 'config/database.php';
 
 echo "<h1>Debug Data Structure</h1>";
 
 try {
-    $db = Database::getInstance();
+    $db = Database::getInstance()->getFirestore();
     
     echo "<h2>Users Data</h2>";
-    $usersRef = $db->getCollection('users');
+    $usersRef = $db->collection('users');
     $users = $usersRef->limit(5)->documents();
     
     foreach ($users as $user) {
@@ -19,7 +19,7 @@ try {
     }
     
     echo "<h2>Cart/Orders Data</h2>";
-    $cartsRef = $db->getCollection('cart');
+    $cartsRef = $db->collection('cart');
     $carts = $cartsRef->limit(3)->documents();
     
     foreach ($carts as $cart) {
@@ -30,7 +30,7 @@ try {
     }
     
     echo "<h2>Listings Data</h2>";
-    $listingsRef = $db->getCollection('listings');
+    $listingsRef = $db->collection('listings');
     $listings = $listingsRef->limit(3)->documents();
     
     foreach ($listings as $listing) {
@@ -41,7 +41,7 @@ try {
     }
     
     echo "<h2>Reports Data</h2>";
-    $reportsRef = $db->getCollection('reports');
+    $reportsRef = $db->collection('reports');
     $reports = $reportsRef->limit(3)->documents();
     
     $reportCount = 0;
@@ -60,5 +60,5 @@ try {
     echo "<p style='color: red;'>Error: " . htmlspecialchars($e->getMessage()) . "</p>";
 }
 
-echo "<p><a href='index.php'>← Back to Dashboard</a></p>";
+echo "<p><a href='index.php'>â† Back to Dashboard</a></p>";
 ?>

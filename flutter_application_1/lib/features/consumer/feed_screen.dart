@@ -1,4 +1,7 @@
+// Consumer Feed Screen
+
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
@@ -66,6 +69,31 @@ class _FeedScreenState extends State<FeedScreen> {
         return 'other';
     }
   }
+  bool _isDataUrl(String? value) {
+    if (value == null) return false;
+    return value.startsWith('data:image/');
+  }
+
+  Widget _buildImageFromUrl(String? url, {BoxFit fit = BoxFit.cover, Widget? fallback}) {
+    if (url == null || url.isEmpty) {
+      return fallback ?? const SizedBox.shrink();
+    }
+    if (_isDataUrl(url)) {
+      try {
+        final base64Part = url.split(',').last;
+        final bytes = base64Decode(base64Part);
+        return Image.memory(bytes, fit: fit);
+      } catch (_) {
+        return fallback ?? const SizedBox.shrink();
+      }
+    }
+    return Image.network(
+      url,
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) => fallback ?? const SizedBox.shrink(),
+    );
+  }
+
 
   PreferredSizeWidget _buildAppBar(AuthService authService) {
     if (authService.hasRole('food_provider')) {
@@ -364,10 +392,11 @@ class _FeedScreenState extends State<FeedScreen> {
                               ),
                               child: DropdownButtonFormField<String>(
                                 value: _selectedCategory,
+                                isExpanded: true,
                                 decoration: InputDecoration(
                                   prefixIcon: Container(
-                                    margin: const EdgeInsets.all(12),
-                                    padding: const EdgeInsets.all(12),
+                                    margin: const EdgeInsets.all(8),
+                                    padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
                                       gradient: AppTheme.warmGradient,
                                       borderRadius: BorderRadius.circular(12),
@@ -375,16 +404,17 @@ class _FeedScreenState extends State<FeedScreen> {
                                     child: const Icon(
                                       Icons.category,
                                       color: Colors.white,
-                                      size: 18,
+                                      size: 16,
                                     ),
                                   ),
+                                  prefixIconConstraints: const BoxConstraints(minWidth: 40, maxWidth: 40),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(16),
                                     borderSide: BorderSide.none,
                                   ),
                                   filled: true,
                                   fillColor: Colors.transparent,
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                                 ),
                                 items: _categories.map((category) {
                                   return DropdownMenuItem(
@@ -407,7 +437,7 @@ class _FeedScreenState extends State<FeedScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 16),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Container(
                               decoration: BoxDecoration(
@@ -417,10 +447,11 @@ class _FeedScreenState extends State<FeedScreen> {
                               ),
                               child: DropdownButtonFormField<String>(
                                 value: _sortBy,
+                                isExpanded: true,
                                 decoration: InputDecoration(
                                   prefixIcon: Container(
-                                    margin: const EdgeInsets.all(12),
-                                    padding: const EdgeInsets.all(12),
+                                    margin: const EdgeInsets.all(8),
+                                    padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
                                       gradient: AppTheme.foodGradient,
                                       borderRadius: BorderRadius.circular(12),
@@ -428,16 +459,17 @@ class _FeedScreenState extends State<FeedScreen> {
                                     child: const Icon(
                                       Icons.sort,
                                       color: Colors.white,
-                                      size: 18,
+                                      size: 16,
                                     ),
                                   ),
+                                  prefixIconConstraints: const BoxConstraints(minWidth: 40, maxWidth: 40),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(16),
                                     borderSide: BorderSide.none,
                                   ),
                                   filled: true,
                                   fillColor: Colors.transparent,
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                                 ),
                                 items: [
                                   DropdownMenuItem(value: 'created_at', child: Text('Newest First')),
@@ -657,11 +689,20 @@ class _FeedScreenState extends State<FeedScreen> {
                         }
                       });
 
+                      final media = MediaQuery.of(context);
+                      final width = media.size.width;
+                      final textScale = media.textScaleFactor.clamp(1.0, 1.3);
+                      // Compute a responsive aspect ratio: narrower screens / larger text => taller cards
+                      double baseRatio = 0.64;
+                      if (width < 360) baseRatio = 0.60;
+                      if (width < 340) baseRatio = 0.56;
+                      final double computedRatio = ((baseRatio / textScale).clamp(0.50, 0.70)).toDouble();
+
                       return GridView.builder(
                         padding: const EdgeInsets.all(16),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 2,
-                          childAspectRatio: 0.7,
+                          childAspectRatio: computedRatio,
                           crossAxisSpacing: 12,
                           mainAxisSpacing: 12,
                         ),
@@ -685,9 +726,9 @@ class _FeedScreenState extends State<FeedScreen> {
 
   Widget _buildEnhancedListingCard(BuildContext context, DocumentSnapshot doc, Map<String, dynamic> data, AuthService authService) {
     final title = data['title'] ?? 'Unknown Food';
-    final originalPrice = (data['original_price'] ?? 0.0) as double;
-    final discountedPrice = (data['discounted_price'] ?? 0.0) as double;
-    final quantity = (data['quantity'] ?? 0) as int;
+    final originalPrice = (data['original_price'] is num) ? (data['original_price'] as num).toDouble() : 0.0;
+    final discountedPrice = (data['discounted_price'] is num) ? (data['discounted_price'] as num).toDouble() : 0.0;
+    final quantity = (data['quantity'] is num) ? (data['quantity'] as num).toInt() : 0;
     final imageUrl = data['images'] != null && 
         data['images'] is List && 
         (data['images'] as List).isNotEmpty 
@@ -697,7 +738,7 @@ class _FeedScreenState extends State<FeedScreen> {
     final expiryTs = data['expiry_datetime'] as Timestamp?;
     
     // Calculate discount percentage
-    final calculatedDiscount = ((originalPrice - discountedPrice) / originalPrice * 100).round();
+    final calculatedDiscount = originalPrice > 0 ? ((originalPrice - discountedPrice) / originalPrice * 100).round() : 0;
     
     return Card(
       elevation: 6,
@@ -731,7 +772,7 @@ class _FeedScreenState extends State<FeedScreen> {
               Stack(
                 children: [
                   Container(
-                    height: 140,
+                    height: 120,
                     width: double.infinity,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -746,33 +787,20 @@ class _FeedScreenState extends State<FeedScreen> {
                     ),
                     child: ClipRRect(
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                      child: imageUrl != null
-                          ? Image.network(
-                              imageUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  decoration: BoxDecoration(
-                                    gradient: AppTheme.foodGradient,
-                                  ),
-                                  child: const Icon(
-                                    Icons.restaurant,
-                                    size: 48,
-                                    color: Colors.white,
-                                  ),
-                                );
-                              },
-                            )
-                          : Container(
-                              decoration: BoxDecoration(
-                                gradient: AppTheme.foodGradient,
-                              ),
-                              child: const Icon(
-                                Icons.restaurant,
-                                size: 48,
-                                color: Colors.white,
-                              ),
-                            ),
+                      child: _buildImageFromUrl(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        fallback: Container(
+                          decoration: BoxDecoration(
+                            gradient: AppTheme.foodGradient,
+                          ),
+                          child: const Icon(
+                            Icons.restaurant,
+                            size: 48,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                   // Enhanced discount badge (only for consumers)
@@ -874,22 +902,24 @@ class _FeedScreenState extends State<FeedScreen> {
               
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
+                  padding: const EdgeInsets.all(12.0),
+                  child: SingleChildScrollView(
+                    physics: const ClampingScrollPhysics(),
+                    child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         title,
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: 16,
+                          fontSize: 15,
                           color: AppTheme.darkGray,
                           fontFamily: 'Poppins',
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       
                       // Price section
                       Row(
@@ -900,16 +930,16 @@ class _FeedScreenState extends State<FeedScreen> {
                               style: const TextStyle(
                                 decoration: TextDecoration.lineThrough,
                                 color: AppTheme.mediumGray,
-                                fontSize: 13,
+                                fontSize: 12,
                                 fontFamily: 'Inter',
                               ),
                               overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
+                        ),
+                      ),
+                          const SizedBox(width: 6),
                           Flexible(
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
                                 gradient: AppTheme.freshGradient,
                                 borderRadius: BorderRadius.circular(12),
@@ -919,7 +949,7 @@ class _FeedScreenState extends State<FeedScreen> {
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 15,
+                                  fontSize: 14,
                                   fontFamily: 'Inter',
                                 ),
                                 overflow: TextOverflow.ellipsis,
@@ -929,23 +959,23 @@ class _FeedScreenState extends State<FeedScreen> {
                         ],
                       ),
                       
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       if (description.isNotEmpty)
                         Text(
                           description,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 13, 
+                            fontSize: 12, 
                             color: AppTheme.mediumGray,
                             fontFamily: 'Inter',
                             height: 1.3,
                           ),
                         ),
                       if (expiryTs != null) ...[
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
                             color: AppTheme.primaryRed.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(8),
@@ -955,11 +985,11 @@ class _FeedScreenState extends State<FeedScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(Icons.schedule, size: 14, color: AppTheme.primaryRed),
-                              const SizedBox(width: 6),
+                              const SizedBox(width: 4),
                               Text(
                                 _formatExpiry(expiryTs),
                                 style: TextStyle(
-                                  fontSize: 12, 
+                                  fontSize: 11, 
                                   color: AppTheme.primaryRed, 
                                   fontWeight: FontWeight.w600,
                                   fontFamily: 'Inter',
@@ -970,9 +1000,9 @@ class _FeedScreenState extends State<FeedScreen> {
                         ),
                       ],
 
-                      const Spacer(),
+                      const SizedBox(height: 8),
                       
-                      // Action buttons (removed View button as requested)
+                      // Action buttons
                       if (authService.hasRole('food_consumer'))
                         Row(
                           children: [
@@ -983,7 +1013,7 @@ class _FeedScreenState extends State<FeedScreen> {
                                 icon: Icons.add_shopping_cart,
                                 onPressed: () => _addToCart(context, doc, data),
                                 gradient: AppTheme.warmGradient,
-                                height: 36,
+                                height: 32,
                               ),
                             ),
                             const SizedBox(width: 6),
@@ -994,12 +1024,12 @@ class _FeedScreenState extends State<FeedScreen> {
                                 icon: Icons.shopping_bag,
                                 onPressed: () => _buyNow(context, doc, data),
                                 gradient: AppTheme.freshGradient,
-                                height: 36,
+                                height: 32,
                               ),
                             ),
                           ],
                         )
-                      else
+                      else if (authService.hasRole('food_provider'))
                         // Provider view - show subtle delete button
                         AnimatedFoodButton(
                           text: 'Remove',
@@ -1007,11 +1037,39 @@ class _FeedScreenState extends State<FeedScreen> {
                           onPressed: () => _deleteListing(context, doc.id),
                           backgroundColor: AppTheme.lightGray.withOpacity(0.3),
                           foregroundColor: AppTheme.mediumGray,
-                          height: 36,
+                          height: 32,
                           borderRadius: BorderRadius.circular(10),
+                        )
+                      else
+                        // Fallback: treat as consumer when role unknown
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 1,
+                              child: AnimatedFoodButton(
+                                text: 'Add to Cart',
+                                icon: Icons.add_shopping_cart,
+                                onPressed: () => _addToCart(context, doc, data),
+                                gradient: AppTheme.warmGradient,
+                                height: 32,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              flex: 1,
+                              child: AnimatedFoodButton(
+                                text: 'Buy Now',
+                                icon: Icons.shopping_bag,
+                                onPressed: () => _buyNow(context, doc, data),
+                                gradient: AppTheme.freshGradient,
+                                height: 32,
+                              ),
+                            ),
+                          ],
                         ),
                     ],
                   ),
+                ),
                 ),
               ),
             ],

@@ -19,57 +19,74 @@ class AuthService extends ChangeNotifier {
   Map<String, dynamic>? get userData => _userData;
 
   AuthService() {
+    // Listen to auth state only once and cleanly
     _auth.authStateChanges().listen(_onAuthStateChanged);
   }
 
+  // MAIN AUTH HANDLER
   Future<void> _onAuthStateChanged(User? user) async {
-    debugPrint('Auth state changed - User: ${user?.uid}');
-    if (user != null) {
-      // Reload user to get the latest email verification status
-      await user.reload();
-      await _loadUserData(user.uid);
-    } else {
-      debugPrint('User signed out - clearing role and data');
-      _userRole = null;
-      _userData = null;
+    debugPrint('Auth state changed: ${user?.uid}');
+
+    if (user == null) {
+      _clearLocalState();
+      notifyListeners();
+      return;
     }
+
+    // Only reload if necessary
+    await _safeReload(user);
+
+    // Load Firestore user data
+    await _loadUserData(user.uid);
+
     notifyListeners();
+  }
+
+  void _clearLocalState() {
+    _userRole = null;
+    _userData = null;
+  }
+
+  Future<void> _safeReload(User user) async {
+    try {
+      await user.reload();
+    } catch (_) {
+      debugPrint("User reload skipped due to network or Firebase issue.");
+    }
   }
 
   Future<void> _loadUserData(String uid) async {
     try {
-      debugPrint('Loading user data for UID: $uid');
       final doc = await _firestore.collection('users').doc(uid).get();
 
-      if (doc.exists) {
-        _userData = doc.data();
-        _userRole = _userData?['role'];
-        debugPrint('User data loaded: $_userData');
-        debugPrint('User role set to: $_userRole');
-        
-        // Update local state with verification status
-        if (currentUser?.emailVerified == true && _userData?['verified'] != true) {
-          await _firestore.collection('users').doc(uid).update({
-            'verified': true,
-            'emailVerified': true,
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-          _userData?['verified'] = true;
-          _userData?['emailVerified'] = true;
-        }
+      if (!doc.exists) return;
+
+      _userData = doc.data() ?? {};
+      _userRole = _userData?['role'];
+
+      // Update Firestore verified flag *only if needed*
+      if (currentUser?.emailVerified == true &&
+          (_userData?['verified'] != true)) {
+        await _firestore.collection('users').doc(uid).update({
+          'verified': true,
+          'emailVerified': true,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        _userData?['verified'] = true;
+        _userData?['emailVerified'] = true;
       }
     } catch (e) {
       debugPrint('Error loading user data: $e');
-      // Do not rethrow to avoid breaking flows on web when Firestore is temporarily unavailable
     }
   }
 
-  // Send email verification through PHP backend
+  // ✔ SAFE, does not spam backend
   Future<Map<String, dynamic>> sendEmailVerification() async {
     try {
       final email = currentUser?.email;
       if (email == null) {
-        throw Exception('No user is currently signed in');
+        return {'success': false, 'message': 'No signed-in user.'};
       }
 
       final response = await http.post(
@@ -79,43 +96,43 @@ class AuthService extends ChangeNotifier {
       );
 
       final data = jsonDecode(response.body);
-      
       if (response.statusCode == 200 && data['success'] == true) {
         return {'success': true, 'message': data['message']};
-      } else {
-        throw Exception(data['message'] ?? 'Failed to send verification email');
       }
+
+      return {
+        'success': false,
+        'message': data['message'] ?? 'Failed to send verification email.'
+      };
     } catch (e) {
-      debugPrint('Error sending verification email: $e');
-      rethrow;
+      return {
+        'success': false,
+        'message': 'Error: ${e.toString()}',
+      };
     }
   }
 
   Future<void> resendVerificationEmail(String email, String password) async {
     try {
-      // Sign in the user
       final credential = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
-      
-      // Send verification email
+
       await credential.user?.sendEmailVerification();
-      debugPrint('Verification email resent to: $email');
-      
-      // Sign out to prevent auto-login
       await _auth.signOut();
-      
-      return;
-    } on FirebaseAuthException catch (e) {
-      debugPrint('Failed to resend verification email: ${e.message}');
+    } catch (e) {
+      debugPrint("Resend verification failed: $e");
       rethrow;
     }
   }
 
-  // Check if user is logged in and verified
-  bool get isLoggedInAndVerified => _auth.currentUser != null && isEmailVerified;
+  bool get isLoggedInAndVerified =>
+      currentUser != null && currentUser!.emailVerified;
 
+  // --------------------------
+  // REGISTER
+  // --------------------------
   Future<Map<String, dynamic>> registerWithEmailAndPassword({
     required String email,
     required String password,
@@ -125,12 +142,8 @@ class AuthService extends ChangeNotifier {
     required String address,
   }) async {
     try {
-      // Validate role
       if (!['food_provider', 'food_consumer'].contains(role)) {
-        return {
-          'success': false,
-          'message': 'Invalid role. Must be food_provider or food_consumer.'
-        };
+        return {'success': false, 'message': 'Invalid role.'};
       }
 
       final credential = await _auth.createUserWithEmailAndPassword(
@@ -138,196 +151,133 @@ class AuthService extends ChangeNotifier {
         password: password,
       );
 
-      if (credential.user != null) {
-        // Create user document in Firestore
-        await _firestore.collection('users').doc(credential.user!.uid).set({
-          'uid': credential.user!.uid,
-          'name': name,
-          'email': email,
-          'phone': phone,
-          'role': role,
-          'address': address,
-          'verified': false,
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-        
-        // Send email verification
-        try {
-          await credential.user!.sendEmailVerification();
-          debugPrint('Verification email sent to: $email');
-          debugPrint('User emailVerified status: ${credential.user!.emailVerified}');
-        } catch (e) {
-          debugPrint('Failed to send verification email: $e');
-          rethrow;
-        }
+      final uid = credential.user!.uid;
 
-        await _loadUserData(credential.user!.uid);
+      await _firestore.collection('users').doc(uid).set({
+        'uid': uid,
+        'name': name,
+        'email': email,
+        'phone': phone,
+        'role': role,
+        'address': address,
+        'verified': false,
+        'emailVerified': false,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
 
-        return {
-          'success': true,
-          'message': 'Registration successful! Please check your email to verify your account.',
-          'user': credential.user,
-          'needsVerification': true
-        };
-      }
+      await credential.user!.sendEmailVerification();
+      await _loadUserData(uid);
 
       return {
-        'success': false,
-        'message': 'Registration failed. Please try again.'
+        'success': true,
+        'message': 'Registration successful! Verify your email.',
+        'user': credential.user,
+        'needsVerification': true,
       };
     } on FirebaseAuthException catch (e) {
-      String message;
-      switch (e.code) {
-        case 'weak-password':
-          message = 'The password provided is too weak.';
-          break;
-        case 'email-already-in-use':
-          message = 'An account already exists for that email.';
-          break;
-        case 'invalid-email':
-          message = 'The email address is not valid.';
-          break;
-        default:
-          message = e.message ?? 'Registration failed.';
-      }
-      return {'success': false, 'message': message};
-    } catch (e) {
-      return {'success': false, 'message': 'An unexpected error occurred.'};
+      return _authError(e);
+    } catch (_) {
+      return {'success': false, 'message': 'Unexpected error.'};
     }
   }
 
-  // Sign in with email and password
+  // --------------------------
+  // LOGIN
+  // --------------------------
   Future<Map<String, dynamic>> signInWithEmailAndPassword(
       String email, String password) async {
     try {
-      // First try to sign in
-      final userCredential = await _auth.signInWithEmailAndPassword(
+      final credential = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
-      
-      // Check if email is verified
-      if (userCredential.user?.emailVerified == false) {
+
+      if (!credential.user!.emailVerified) {
         await _auth.signOut();
         return {
           'success': false,
           'code': 'email-not-verified',
-          'message': 'Please verify your email before signing in.',
+          'message': 'Please verify your email first.',
         };
       }
 
-      try {
-        await _loadUserData(userCredential.user!.uid);
-      } catch (_) {}
+      await _loadUserData(credential.user!.uid);
 
-      // If role missing in Firestore, infer from custom claims if present
-      if (_userRole == null) {
-        try {
-          final idTokenResult = await userCredential.user!.getIdTokenResult();
-          final claims = idTokenResult.claims ?? {};
-          final claimRole = claims['role'];
-          if (claimRole is String && (claimRole == 'food_provider' || claimRole == 'food_consumer')) {
-            _userRole = claimRole;
-          }
-        } catch (_) {}
-      }
       return {
         'success': true,
         'message': 'Sign in successful!',
-        'user': userCredential.user,
+        'user': credential.user,
       };
     } on FirebaseAuthException catch (e) {
-      String message;
-      switch (e.code) {
-        case 'user-not-found':
-          message = 'No user found for that email.';
-          break;
-        case 'wrong-password':
-          message = 'Wrong password provided.';
-          break;
-        case 'invalid-email':
-          message = 'The email address is not valid.';
-          break;
-        case 'user-disabled':
-          message = 'This user account has been disabled.';
-          break;
-        default:
-          message = e.message ?? 'Sign in failed.';
-      }
-      return {'success': false, 'message': message};
-    } catch (e) {
-      return {'success': false, 'message': 'An unexpected error occurred.'};
+      return _authError(e);
+    } catch (_) {
+      return {'success': false, 'message': 'Unexpected error.'};
     }
   }
 
-  // Send password reset email
+  Map<String, dynamic> _authError(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'weak-password':
+        return {'success': false, 'message': 'Password too weak.'};
+      case 'email-already-in-use':
+        return {'success': false, 'message': 'Email already used.'};
+      case 'invalid-email':
+        return {'success': false, 'message': 'Invalid email.'};
+      case 'user-not-found':
+        return {'success': false, 'message': 'User not found.'};
+      case 'wrong-password':
+        return {'success': false, 'message': 'Wrong password.'};
+      default:
+        return {'success': false, 'message': e.message ?? 'Auth error.'};
+    }
+  }
+
+  // --------------------------
+  // PASSWORD RESET
+  // --------------------------
   Future<Map<String, dynamic>> sendPasswordResetEmail(String email) async {
     try {
       await _auth.sendPasswordResetEmail(email: email);
-      return {
-        'success': true,
-        'message': 'Password reset email sent! Check your inbox.',
-      };
+      return {'success': true, 'message': 'Reset email sent.'};
     } on FirebaseAuthException catch (e) {
-      String message;
-      switch (e.code) {
-        case 'user-not-found':
-          message = 'No user found for that email.';
-          break;
-        case 'invalid-email':
-          message = 'The email address is not valid.';
-          break;
-        default:
-          message = e.message ?? 'Failed to send password reset email.';
-      }
-      return {'success': false, 'message': message};
-    } catch (e) {
-      return {'success': false, 'message': 'An unexpected error occurred.'};
+      return _authError(e);
+    } catch (_) {
+      return {'success': false, 'message': 'Unexpected error.'};
     }
   }
 
-  // Resend email verification
+  // --------------------------
+  // VERIFICATION RESEND
+  // --------------------------
   Future<Map<String, dynamic>> resendEmailVerification() async {
     try {
-      if (currentUser != null) {
-        await currentUser!.sendEmailVerification();
-        return {
-          'success': true,
-          'message': 'Verification email sent! Check your inbox.',
-        };
-      }
-      return {'success': false, 'message': 'No user logged in.'};
-    } catch (e) {
-      return {'success': false, 'message': 'Failed to send verification email.'};
+      await currentUser?.sendEmailVerification();
+      return {'success': true, 'message': 'Verification email sent!'};
+    } catch (_) {
+      return {'success': false, 'message': 'Error sending verification email.'};
     }
   }
 
-  // Sign out
+  // --------------------------
+  // SIGN OUT
+  // --------------------------
   Future<void> signOut() async {
     await _auth.signOut();
-    _userRole = null;
-    _userData = null;
+    _clearLocalState();
     notifyListeners();
   }
 
-  // Force sign-out on hot reload for web to avoid sticky sessions
-  // Call from main() via WidgetsBindingObserver if desired. For now, expose a helper:
-  Future<void> signOutIfWebHotReload() async {
-    try {
-      await _auth.signOut();
-    } catch (_) {}
-  }
-
-  // Check if user has specific role
+  // --------------------------
+  // ROLE CHECKER
+  // --------------------------
   bool hasRole(String role) {
-    debugPrint('hasRole($role) called - Current _userRole: $_userRole');
-    debugPrint('User data: $_userData');
-    debugPrint('Current user ID: ${currentUser?.uid}');
     return _userRole == role;
   }
 
-  // Update user verification status
+  // --------------------------
+  // VERIFICATION STATUS
+  // --------------------------
   Future<void> updateVerificationStatus(bool verified) async {
     if (currentUser == null) return;
 
@@ -335,47 +285,27 @@ class AuthService extends ChangeNotifier {
       await _firestore.collection('users').doc(currentUser!.uid).update({
         'verified': verified,
       });
-      
-      if (_userData != null) {
-        _userData!['verified'] = verified;
-        notifyListeners();
-      }
-    } catch (e) {
-      debugPrint('Error updating verification status: $e');
-    }
-  }
 
-  // Reload current user (useful after email verification)
-  Future<void> reloadUser() async {
-    if (currentUser != null) {
-      await currentUser!.reload();
-      await _loadUserData(currentUser!.uid);
+      _userData?['verified'] = verified;
       notifyListeners();
+    } catch (e) {
+      debugPrint('Verification status update failed: $e');
     }
   }
 
-  // Force sync verification status from Firebase Auth to Firestore
-  Future<void> syncVerificationStatus() async {
+  Future<void> reloadUser() async {
     if (currentUser == null) return;
 
     try {
       await currentUser!.reload();
-      
-      if (currentUser!.emailVerified) {
-        await _firestore.collection('users').doc(currentUser!.uid).update({
-          'verified': true,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-        
-        if (_userData != null) {
-          _userData!['verified'] = true;
-        }
-        
-        debugPrint('Verification status synced to Firestore');
-        notifyListeners();
-      }
-    } catch (e) {
-      debugPrint('Error syncing verification status: $e');
-    }
+      await _loadUserData(currentUser!.uid);
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> syncVerificationStatus() async {
+    if (currentUser == null) return;
+
+    await reloadUser();
   }
 }

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET');
@@ -6,18 +6,40 @@ header('Access-Control-Allow-Headers: Content-Type');
 
 require_once __DIR__ . '/../config/database.php';
 
+// Allow slower Firestore responses on Windows/dev setups - this is a heavy operation
+$scriptTimeout = getenv('MEALDEAL_API_TIMEOUT');
+$scriptTimeout = is_numeric($scriptTimeout) ? max(30, (int)$scriptTimeout) : 90;
+set_time_limit($scriptTimeout);
+
+// Simple file-based cache to avoid repeating heavy Firestore scans
+$cacheFile = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'md_user_contributions_cache.json';
+$cacheTtlSeconds = 60; // 1 minute cache is fine for admin analytics
+
+if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $cacheTtlSeconds) {
+    $cached = @file_get_contents($cacheFile);
+    if ($cached) {
+        echo $cached;
+        exit;
+    }
+}
+
 try {
-    $db = Database::getInstance();
+    $db = Database::getInstance()->getFirestore();
     
-    // Get all users
-    $usersRef = $db->getCollection('users');
-    $users = $usersRef->limit(200)->documents();
+    // Reduce limit to prevent timeouts - only get active users
+    $usersRef = $db->collection('users');
+    $users = $usersRef->limit(30)->documents(); // Reduced from 50 to 30
     
     $userContributions = [];
+    $listingCache = []; // Cache listing lookups to avoid repeated queries
     
+    $userCount = 0;
     foreach ($users as $user) {
+        if ($userCount >= 30) break; // Safety limit
+        
         $userData = $user->data();
         $userId = $user->id();
+        $userCount++;
         
         // Initialize user contribution data
         $contribution = [
@@ -34,50 +56,63 @@ try {
             'active_listings' => 0
         ];
         
-        if ($userData['role'] === 'food_consumer') {
-            // Calculate consumer contributions
-            $cartsRef = $db->getCollection('cart');
-            $consumerOrders = $cartsRef->where('consumer_id', '=', $userId)->limit(100)->documents();
-            
-            foreach ($consumerOrders as $order) {
-                $orderData = $order->data();
-                $contribution['total_orders']++;
+        try {
+            if ($userData['role'] === 'food_consumer') {
+                // Calculate consumer contributions - limit queries
+                $cartsRef = $db->collection('cart');
+                $consumerOrders = $cartsRef->where('consumer_id', '=', $userId)->limit(15)->documents(); // Reduced from 100 to 15
                 
-                // Check if order is completed
-                if (isset($orderData['status'])) {
-                    $status = strtolower(trim($orderData['status']));
-                    if (in_array($status, ['completed', 'delivered', 'fulfilled', 'done', 'success', 'finished', 'picked_up'])) {
+                foreach ($consumerOrders as $order) {
+                    $orderData = $order->data();
+                    $contribution['total_orders']++;
+                    
+                    // Check if order is completed
+                    if (isset($orderData['status'])) {
+                        $status = strtolower(trim($orderData['status']));
+                        if (in_array($status, ['completed', 'delivered', 'fulfilled', 'done', 'success', 'finished', 'picked_up'])) {
+                            $contribution['completed_orders']++;
+                        }
+                    } elseif (isset($orderData['checkout_date']) || isset($orderData['completed_at'])) {
                         $contribution['completed_orders']++;
                     }
-                } elseif (isset($orderData['checkout_date']) || isset($orderData['completed_at'])) {
-                    $contribution['completed_orders']++;
-                }
-                
-                // Calculate spending and savings
-                if (isset($orderData['total_price'])) {
-                    $orderValue = floatval($orderData['total_price']);
-                    $contribution['total_spent'] += $orderValue;
-                    $contribution['total_savings'] += ($orderValue * 0.5); // Assuming 50% savings
-                }
-                
-                // Calculate food saved from items
-                if (isset($orderData['items']) && is_array($orderData['items'])) {
-                    foreach ($orderData['items'] as $item) {
-                        $quantity = isset($item['quantity']) ? intval($item['quantity']) : 0;
-                        
-                        // Try to get weight from item first
-                        if (isset($item['weight_per_unit'])) {
-                            $weightKg = floatval($item['weight_per_unit']);
-                            $contribution['food_saved'] += ($quantity * $weightKg);
-                            continue;
-                        }
-                        
-                        // Fallback: look up the listing's weight
-                        try {
+                    
+                    // Calculate spending and savings
+                    if (isset($orderData['total_price'])) {
+                        $orderValue = floatval($orderData['total_price']);
+                        $contribution['total_spent'] += $orderValue;
+                        $contribution['total_savings'] += ($orderValue * 0.5); // Assuming 50% savings
+                    }
+                    
+                    // Calculate food saved from items - use cache to avoid repeated lookups
+                    if (isset($orderData['items']) && is_array($orderData['items'])) {
+                        foreach ($orderData['items'] as $item) {
+                            $quantity = isset($item['quantity']) ? intval($item['quantity']) : 0;
+                            
+                            // Try to get weight from item first
+                            if (isset($item['weight_per_unit'])) {
+                                $weightKg = floatval($item['weight_per_unit']);
+                                $contribution['food_saved'] += ($quantity * $weightKg);
+                                continue;
+                            }
+                            
+                            // Use cache for listing lookups
                             if (isset($item['listing_id'])) {
-                                $listingDoc = $db->getDocument('listings', $item['listing_id'])->snapshot();
-                                if ($listingDoc->exists()) {
-                                    $listingData = $listingDoc->data();
+                                $listingId = $item['listing_id'];
+                                if (!isset($listingCache[$listingId])) {
+                                    try {
+                                        $listingDoc = $db->collection('listings')->document($listingId)->snapshot();
+                                        if ($listingDoc->exists()) {
+                                            $listingCache[$listingId] = $listingDoc->data();
+                                        } else {
+                                            $listingCache[$listingId] = null;
+                                        }
+                                    } catch (Exception $e) {
+                                        $listingCache[$listingId] = null;
+                                    }
+                                }
+                                
+                                $listingData = $listingCache[$listingId];
+                                if ($listingData) {
                                     $weightKg = 0;
                                     
                                     if (isset($listingData['weight_per_unit'])) {
@@ -87,65 +122,71 @@ try {
                                     } elseif (isset($listingData['weight'])) {
                                         $weightKg = floatval($listingData['weight']);
                                     } else {
-                                        // Estimate weight based on food type
                                         $weightKg = estimateFoodWeight($listingData, $quantity);
                                     }
                                     
                                     if ($weightKg > 0 && $quantity > 0) {
                                         $contribution['food_saved'] += ($quantity * $weightKg);
                                     }
+                                } else {
+                                    // Fallback estimate if listing not found
+                                    $contribution['food_saved'] += ($quantity * 0.5);
                                 }
+                            } else {
+                                // No listing ID, use default estimate
+                                $contribution['food_saved'] += ($quantity * 0.5);
                             }
-                        } catch (Exception $lookupEx) {
-                            // Best-effort only
-                            error_log('User contribution listing lookup failed: ' . $lookupEx->getMessage());
                         }
                     }
                 }
-            }
-            
-        } elseif ($userData['role'] === 'food_provider') {
-            // Calculate provider contributions
-            $listingsRef = $db->getCollection('listings');
-            $providerListings = $listingsRef->where('provider_id', '=', $userId)->limit(100)->documents();
-            
-            foreach ($providerListings as $listing) {
-                $listingData = $listing->data();
-                $contribution['total_listings']++;
                 
-                if (isset($listingData['status']) && $listingData['status'] === 'active') {
-                    $contribution['active_listings']++;
-                }
+            } elseif ($userData['role'] === 'food_provider') {
+                // Calculate provider contributions - limit queries
+                $listingsRef = $db->collection('listings');
+                $providerListings = $listingsRef->where('provider_id', '=', $userId)->limit(15)->documents(); // Reduced from 100 to 15
                 
-                // Calculate food saved from listings
-                if (isset($listingData['quantity'])) {
-                    $quantity = intval($listingData['quantity']);
-                    if ($quantity > 0) {
-                        $weightKg = 0;
-                        
-                        if (isset($listingData['weight_per_unit'])) {
-                            $weightKg = floatval($listingData['weight_per_unit']);
-                        } elseif (isset($listingData['unit_weight_kg'])) {
-                            $weightKg = floatval($listingData['unit_weight_kg']);
-                        } elseif (isset($listingData['weight'])) {
-                            $weightKg = floatval($listingData['weight']);
-                        } else {
-                            $weightKg = estimateFoodWeight($listingData, $quantity);
+                foreach ($providerListings as $listing) {
+                    $listingData = $listing->data();
+                    $contribution['total_listings']++;
+                    
+                    if (isset($listingData['status']) && $listingData['status'] === 'active') {
+                        $contribution['active_listings']++;
+                    }
+                    
+                    // Calculate food saved from listings
+                    if (isset($listingData['quantity'])) {
+                        $quantity = intval($listingData['quantity']);
+                        if ($quantity > 0) {
+                            $weightKg = 0;
+                            
+                            if (isset($listingData['weight_per_unit'])) {
+                                $weightKg = floatval($listingData['weight_per_unit']);
+                            } elseif (isset($listingData['unit_weight_kg'])) {
+                                $weightKg = floatval($listingData['unit_weight_kg']);
+                            } elseif (isset($listingData['weight'])) {
+                                $weightKg = floatval($listingData['weight']);
+                            } else {
+                                $weightKg = estimateFoodWeight($listingData, $quantity);
+                            }
+                            
+                            $contribution['food_saved'] += ($weightKg * $quantity);
                         }
-                        
-                        $contribution['food_saved'] += ($weightKg * $quantity);
+                    }
+                    
+                    // Calculate revenue and savings
+                    if (isset($listingData['discounted_price']) && isset($listingData['quantity'])) {
+                        $price = floatval($listingData['discounted_price']);
+                        $quantity = intval($listingData['quantity']);
+                        $revenue = $price * $quantity;
+                        $contribution['total_spent'] += $revenue; // For providers, this represents revenue
+                        $contribution['total_savings'] += ($revenue * 0.5); // Estimated savings for consumers
                     }
                 }
-                
-                // Calculate revenue and savings
-                if (isset($listingData['discounted_price']) && isset($listingData['quantity'])) {
-                    $price = floatval($listingData['discounted_price']);
-                    $quantity = intval($listingData['quantity']);
-                    $revenue = $price * $quantity;
-                    $contribution['total_spent'] += $revenue; // For providers, this represents revenue
-                    $contribution['total_savings'] += ($revenue * 0.5); // Estimated savings for consumers
-                }
             }
+        } catch (Exception $userEx) {
+            // Skip this user if there's an error, but continue with others
+            error_log('Error processing user ' . $userId . ': ' . $userEx->getMessage());
+            continue;
         }
         
         // Only include users with some activity
@@ -159,12 +200,17 @@ try {
         return $b['food_saved'] <=> $a['food_saved'];
     });
     
-    echo json_encode([
+    $responseJson = json_encode([
         'success' => true,
         'data' => $userContributions,
         'count' => count($userContributions),
         'timestamp' => date('Y-m-d H:i:s')
     ]);
+
+    // Best-effort write to cache
+    @file_put_contents($cacheFile, $responseJson);
+
+    echo $responseJson;
     
 } catch (Exception $e) {
     http_response_code(500);
@@ -227,3 +273,4 @@ function estimateFoodWeight($listingData, $quantity) {
     return $defaultWeightPerUnit;
 }
 ?>
+

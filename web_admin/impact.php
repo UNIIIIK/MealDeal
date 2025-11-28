@@ -3,6 +3,45 @@ session_start();
 require_once 'includes/auth.php';
 if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
 ?>
+<?php
+// Simple demo/fallback data so the page shows meaningful values
+$impactFallback = [
+    'stats' => [
+        'orders' => [
+            'total_food_saved' => 128.4,
+            'total_savings'    => 15250.75,
+            'completed_orders' => 87,
+        ],
+        'users'  => [
+            'total_users'  => 42,
+            'providers'    => 12,
+            'consumers'    => 30,
+        ],
+    ],
+    'userContributions' => [
+        [
+            'id'            => 'demo-user-1',
+            'name'          => 'Sample Saver',
+            'email'         => 'sample.saver@example.com',
+            'role'          => 'food_consumer',
+            'food_saved'    => 26.5,
+            'total_orders'  => 14,
+            'total_spent'   => 282.50,
+            'total_savings' => 310.20,
+        ],
+        [
+            'id'            => 'demo-user-2',
+            'name'          => 'Eco Provider',
+            'email'         => 'eco.provider@example.com',
+            'role'          => 'food_provider',
+            'food_saved'    => 54.2,
+            'total_orders'  => 0,
+            'total_spent'   => 0,
+            'total_savings' => 0,
+        ],
+    ],
+];
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -67,21 +106,64 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
     </style>
 </head>
 <body>
+    <!-- Navigation (consistent with sidebar layout) -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-success">
         <div class="container-fluid">
             <a class="navbar-brand" href="index.php">MealDeal Super Admin</a>
             <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="dashboard.php">Dashboard</a>
-                <a class="nav-link" href="users.php">Users</a>
-                <a class="nav-link" href="listings.php">Listings</a>
-                <a class="nav-link" href="reports.php">Reports</a>
-                <a class="nav-link" href="pricing.php">Pricing</a>
                 <a class="nav-link" href="logout.php">Logout</a>
             </div>
         </div>
     </nav>
 
-    <div class="container py-4">
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-3 col-lg-2 d-md-block bg-light sidebar">
+                <div class="position-sticky pt-3">
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="index.php">
+                                <i class="bi bi-speedometer2 me-2"></i>Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="reports.php">
+                                <i class="bi bi-flag me-2"></i>Reports
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="users.php">
+                                <i class="bi bi-people me-2"></i>User Management
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="listings.php">
+                                <i class="bi bi-card-checklist me-2"></i>Content Moderation
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="leaderboard.php">
+                                <i class="bi bi-trophy me-2"></i>Leaderboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="impact.php">
+                                <i class="bi bi-graph-up me-2"></i>Impact Tracking
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="pricing.php">
+                                <i class="bi bi-tags me-2"></i>Pricing Control
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Main content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+    <div class="py-4">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1 class="h3 mb-0">Impact Tracking</h1>
             <button class="btn btn-success" onclick="refreshData()">
@@ -197,11 +279,17 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
             </div>
         </div>
     </div>
+            </main>
+        </div>
+    </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.js"></script>
+    <!-- Use UMD build so Chart is available globally -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
         let foodWasteChart, contributionChart;
         let allUserContributions = [];
+        // PHP-provided fallback data for when APIs return no data or fail
+        const IMPACT_FALLBACK = <?php echo json_encode($impactFallback, JSON_UNESCAPED_UNICODE); ?>;
 
         // Load data on page load
         document.addEventListener('DOMContentLoaded', function() {
@@ -219,21 +307,33 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
             try {
                 // Load overall stats
                 const statsResponse = await fetch('api/get_comprehensive_stats.php');
-                const statsData = await statsResponse.json();
+                const statsData = await statsResponse.json().catch(() => ({ success: false }));
                 
-                if (statsData.success) {
-                    updateOverallMetrics(statsData.data);
+                let statsPayload = (statsData && statsData.success && statsData.data)
+                    ? statsData.data
+                    : IMPACT_FALLBACK.stats;
+
+                if (!(statsData && statsData.success)) {
+                    showError('Failed to load impact stats. Showing sample data.');
                 }
+
+                updateOverallMetrics(statsPayload);
 
                 // Load user contributions
                 await loadUserContributions();
                 
-                // Initialize charts
-                initializeCharts(statsData.data);
+                // Initialize charts with safe data
+                initializeCharts(statsPayload);
                 
             } catch (error) {
                 console.error('Error loading impact data:', error);
-                showError('Failed to load impact data. Please try again.');
+                // Full fallback when everything fails
+                updateOverallMetrics(IMPACT_FALLBACK.stats);
+                allUserContributions = IMPACT_FALLBACK.userContributions;
+                displayUserContributions(allUserContributions);
+                updateTopContributors(allUserContributions);
+                initializeCharts(IMPACT_FALLBACK.stats);
+                showError('Failed to load impact data from server. Showing sample data.');
             }
         }
 
@@ -251,17 +351,29 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
         async function loadUserContributions() {
             try {
                 const response = await fetch('api/get_user_contributions.php');
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
                 const data = await response.json();
                 
-                if (data.success) {
-                    allUserContributions = data.data;
+                if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+                    // Limit to 50 entries on the client for faster rendering
+                    allUserContributions = data.data.slice(0, 50);
                     displayUserContributions(allUserContributions);
-                    updateTopContributors(data.data);
+                    updateTopContributors(allUserContributions);
+                } else {
+                    throw new Error(data.error || 'No contribution data available');
                 }
             } catch (error) {
                 console.error('Error loading user contributions:', error);
-                document.getElementById('userContributions').innerHTML = 
-                    '<div class="alert alert-danger">Failed to load user contributions.</div>';
+                // Use PHP fallback data so the section is never empty
+                allUserContributions = IMPACT_FALLBACK.userContributions;
+                displayUserContributions(allUserContributions);
+                updateTopContributors(allUserContributions);
+                document.getElementById('userContributions').insertAdjacentHTML(
+                    'afterbegin',
+                    '<div class="alert alert-warning mb-3">Live user contributions could not be loaded. Showing sample data instead.</div>'
+                );
             }
         }
 
@@ -294,12 +406,12 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
                         </div>
                         <div class="col-md-2">
                             <div class="contribution-badge">
-                                $${user.total_spent.toFixed(2)} spent
+                                ₱${user.total_spent.toFixed(2)} spent
                             </div>
                         </div>
                         <div class="col-md-2">
                             <div class="contribution-badge">
-                                $${user.total_savings.toFixed(2)} saved
+                                ₱${user.total_savings.toFixed(2)} saved
                             </div>
                         </div>
                         <div class="col-md-1">
@@ -331,7 +443,9 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
         }
 
         function updateTopContributors(contributions) {
-            const topContributors = contributions.slice(0, 5);
+            // Always sort by food_saved descending to show best contributors first
+            const sorted = [...contributions].sort((a, b) => b.food_saved - a.food_saved);
+            const topContributors = sorted.slice(0, 5);
             const container = document.getElementById('topContributors');
             
             const html = topContributors.map((user, index) => `
@@ -346,9 +460,24 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
             `).join('');
 
             container.innerHTML = html;
+
+            // Also render a simple leaderboard list (top 10 contributors)
+            const leaderboard = sorted.slice(0, 10).map((u, i) => `
+                <div class="d-flex justify-content-between align-items-center py-1 border-bottom">
+                    <div><strong>#${i + 1}</strong> ${u.name}</div>
+                    <small class="text-muted">${u.food_saved.toFixed(1)} kg</small>
+                </div>
+            `).join('');
+            document.getElementById('impactLeaderboard').innerHTML = leaderboard || '<p class="text-muted">No leaderboard data.</p>';
         }
 
         function initializeCharts(data) {
+            // Derive simple weekly trend from total_food_saved if available
+            const totalFood = data.orders?.total_food_saved || 0;
+            const weeklyPoints = 4;
+            const perWeek = totalFood > 0 ? (totalFood / weeklyPoints) : 0;
+            const foodSeries = Array(weeklyPoints).fill(perWeek);
+
             // Food Waste Chart
             const foodWasteCtx = document.getElementById('foodWasteChart').getContext('2d');
             foodWasteChart = new Chart(foodWasteCtx, {
@@ -357,7 +486,7 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
                     labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
                     datasets: [{
                         label: 'Food Saved (kg)',
-                        data: [12, 19, 15, 25],
+                        data: foodSeries,
                         borderColor: '#28a745',
                         backgroundColor: 'rgba(40, 167, 69, 0.1)',
                         tension: 0.4

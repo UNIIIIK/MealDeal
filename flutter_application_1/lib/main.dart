@@ -1,13 +1,16 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+
 import 'firebase_options.dart';
 import 'theme/app_theme.dart';
+
 import 'features/auth/auth_service.dart';
 import 'services/messaging_service.dart';
+import 'services/firestore_helper.dart';
+
 import 'features/welcome/welcome_screen.dart';
 import 'features/consumer/feed_screen.dart';
 import 'features/consumer/edit_profile_screen.dart';
@@ -21,14 +24,16 @@ import 'features/messaging/chat_list_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Fast + safe Firebase initialization
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  // Ensure clean auth state during dev reloads
-  try {
-    await FirebaseAuth.instance.signOut();
-  } catch (_) {}
-  runApp(const MealDealApp()  );
+
+  // Configure Firestore for better connection handling
+  FirestoreHelper.configureFirestore();
+
+  runApp(const MealDealApp());
 }
 
 class MealDealApp extends StatelessWidget {
@@ -38,14 +43,21 @@ class MealDealApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthService()),
-        ChangeNotifierProvider(create: (_) => MessagingService()),
+        // Lazy loading = created only when needed
+        ChangeNotifierProvider<AuthService>(
+          lazy: true,
+          create: (_) => AuthService(),
+        ),
+        ChangeNotifierProvider<MessagingService>(
+          lazy: true,
+          create: (_) => MessagingService(),
+        ),
       ],
       child: MaterialApp(
         title: 'MealDeal - Food Surplus Redistribution',
         theme: AppTheme.lightTheme,
-        home: const MainNavigationScreen(),
         debugShowCheckedModeBanner: false,
+        home: const MainNavigationScreen(),
       ),
     );
   }
@@ -53,118 +65,102 @@ class MealDealApp extends StatelessWidget {
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
-
   @override
   State<MainNavigationScreen> createState() => _MainNavigationScreenState();
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _selectedIndex = 0;
-  String? _lastUserRole;
+  String? _lastRole;
+  bool _isUpdatingRole = false;
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AuthService>(
-      builder: (context, authService, child) {
-        // Show welcome screen if not logged in
-        if (!authService.isLoggedIn) {
+      builder: (context, auth, _) {
+        if (!auth.isLoggedIn) {
           return const WelcomeScreen();
         }
-
-        // Show role-based navigation for logged in users
-        return _buildAuthenticatedApp(authService);
+        return _buildForRole(auth);
       },
     );
   }
 
-  Widget _buildAuthenticatedApp(AuthService authService) {
-    final isProvider = authService.hasRole('food_provider');
-    final isConsumer = authService.hasRole('food_consumer');
-    final currentRole = isProvider ? 'provider' : (isConsumer ? 'consumer' : 'none');
+  Widget _buildForRole(AuthService auth) {
+    final isProvider = auth.hasRole('food_provider');
+    final isConsumer = auth.hasRole('food_consumer');
+
+    final role = isProvider
+        ? 'provider'
+        : isConsumer
+            ? 'consumer'
+            : 'none';
+
+    if (role == 'none') return const WelcomeScreen();
 
     List<Widget> screens;
-    List<BottomNavigationBarItem> navItems;
+    List<BottomNavigationBarItem> items;
 
-    if (isProvider) {
-      screens = [
-        const FeedScreen(), // Home
-        const OrdersManagementScreen(),
-        const ChatListScreen(), // Messages
-        const AnalyticsScreen(),
-        const ProfileScreen(),
+    if (role == 'provider') {
+      screens = const [
+        FeedScreen(),
+        OrdersManagementScreen(),
+        ChatListScreen(),
+        AnalyticsScreen(),
+        ProfileScreen(),
       ];
-      navItems = [
-        const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.shopping_cart),
-          label: 'Orders',
-        ),
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.message),
-          label: 'Messages',
-        ),
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.bar_chart),
-          label: 'Analytics',
-        ),
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.person),
-          label: 'Profile',
-        ),
-      ];
-    } else if (isConsumer) {
-      screens = [
-        const FeedScreen(), 
-        const ChatListScreen(), // Messages
-        const ProfileScreen()
-      ];
-      navItems = [
-        const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.message),
-          label: 'Messages',
-        ),
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.person),
-          label: 'Profile',
-        ),
+      items = const [
+        BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+        BottomNavigationBarItem(icon: Icon(Icons.shopping_cart), label: 'Orders'),
+        BottomNavigationBarItem(icon: Icon(Icons.message), label: 'Messages'),
+        BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Analytics'),
+        BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
       ];
     } else {
-      // Fallback for users without proper role
-      return const WelcomeScreen();
+      screens = const [
+        FeedScreen(),
+        ChatListScreen(),
+        ProfileScreen(),
+      ];
+      items = const [
+        BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+        BottomNavigationBarItem(icon: Icon(Icons.message), label: 'Messages'),
+        BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+      ];
     }
 
-    // Handle role changes and ensure valid index
-    if (_lastUserRole != currentRole || _selectedIndex >= navItems.length) {
+    // Reset index when role changes or index is out of bounds
+    // Capture role value to avoid closure issues
+    final currentRole = role;
+    if ((_lastRole != currentRole || _selectedIndex >= items.length) && !_isUpdatingRole) {
+      _isUpdatingRole = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           setState(() {
-            _selectedIndex = 0; // Always reset to Home tab
-            _lastUserRole = currentRole;
+            if (_lastRole != currentRole) {
+              _lastRole = currentRole;
+            }
+            if (_selectedIndex >= items.length) {
+              _selectedIndex = 0;
+            }
+            _isUpdatingRole = false;
           });
+        } else {
+          _isUpdatingRole = false;
         }
       });
     }
 
-    // Ensure _selectedIndex is within bounds
-    final safeIndex = _selectedIndex >= navItems.length ? 0 : _selectedIndex;
+    final index = _selectedIndex >= items.length ? 0 : _selectedIndex;
 
     return Scaffold(
-      body: IndexedStack(
-        index: safeIndex,
-        children: screens,
-      ),
+      body: IndexedStack(index: index, children: screens),
       bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: safeIndex,
-        onTap: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
+        currentIndex: index,
         selectedItemColor: Colors.green.shade700,
         unselectedItemColor: Colors.grey.shade600,
-        items: navItems,
+        items: items,
+        onTap: (i) => setState(() => _selectedIndex = i),
       ),
     );
   }
@@ -175,659 +171,381 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Consumer<AuthService>(
-        builder: (context, authService, child) {
-          final userData = authService.userData;
-          final isConsumer = authService.hasRole('food_consumer');
-          
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // User info card with edit button
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            CircleAvatar(
-                              radius: 25,
-                              backgroundColor: Colors.green.shade200,
-                              child: Text(
-                                userData?['name']?[0]?.toUpperCase() ?? 'U',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.green.shade800,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    userData?['name'] ?? 'Unknown User',
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Text(
-                                    userData?['email'] ?? '',
-                                    style: TextStyle(
-                                      color: Colors.grey.shade600,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  Container(
-                                    margin: const EdgeInsets.only(top: 4),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: authService.hasRole('food_provider')
-                                          ? Colors.blue.shade100
-                                          : Colors.green.shade100,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      authService.hasRole('food_provider')
-                                          ? 'Food Provider'
-                                          : 'Food Consumer',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: authService.hasRole('food_provider')
-                                            ? Colors.blue.shade700
-                                            : Colors.green.shade700,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            // Small edit button
-                            IconButton(
-                              icon: Icon(Icons.edit, size: 18, color: Colors.grey.shade600),
-                              onPressed: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (context) => const EditProfileScreen(),
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        if (userData?['phone'] != null) ...[
-                          Row(
-                            children: [
-                              const Icon(Icons.phone, size: 14),
-                              const SizedBox(width: 6),
-                              Text(userData!['phone'], style: const TextStyle(fontSize: 14)),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                        ],
-                        if (userData?['address'] != null) ...[
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Icon(Icons.location_on, size: 14),
-                              const SizedBox(width: 6),
-                              Expanded(child: Text(userData!['address'], style: const TextStyle(fontSize: 14))),
-                            ],
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                
-                // Consumer-specific: My Purchases quick actions
-                if (isConsumer) ...[
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Text(
-                                'My Purchases',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const Spacer(),
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (context) => const MyOrdersScreen(),
-                                    ),
-                                  );
-                                },
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text('View Purchase History'),
-                                    SizedBox(width: 4),
-                                    Icon(Icons.chevron_right, size: 18),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              _PurchaseTile(
-                                icon: Icons.restaurant_outlined,
-                                label: 'Preparing',
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (context) => const MyOrdersScreen(initialFilter: 'pending'),
-                                    ),
-                                  );
-                                },
-                              ),
-                              _PurchaseTile(
-                                icon: Icons.local_shipping_outlined,
-                                label: 'Ready for Pickup',
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (context) => const MyOrdersScreen(initialFilter: 'awaiting_pickup'),
-                                    ),
-                                  );
-                                },
-                              ),
-                              _PurchaseTile(
-                                icon: Icons.check_circle_outline,
-                                label: 'Picked Up',
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (context) => const MyOrdersScreen(initialFilter: 'claimed'),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                
-                // Consumer-specific: My Claims section
-                if (isConsumer) ...[
-                  InkWell(
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const MyClaimsScreen(),
-                        ),
-                      );
-                    },
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.receipt_long, color: Colors.green.shade600, size: 20),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  'My Claims',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const Spacer(),
-                                const Icon(Icons.chevron_right),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            _buildClaimsList(context, authService),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                
+    final auth = context.watch<AuthService>();
+    final userData = auth.userData;
+    final isConsumer = auth.hasRole('food_consumer');
 
-                // Provider-specific: My Listings section
-                if (authService.hasRole('food_provider')) ...[
-                  InkWell(
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const MyListingsScreen(),
-                        ),
-                      );
-                    },
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.inventory_2, color: Colors.orange.shade600, size: 20),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  'My Listings',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const Spacer(),
-                                const Icon(Icons.chevron_right),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            _buildListingsList(context, authService),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                
-                // Menu options
-                ListTile(
-                  leading: const Icon(Icons.message),
-                  title: const Text('Messages'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const ChatListScreen(),
-                      ),
-                    );
-                  },
-                ),
-                if (authService.hasRole('food_provider'))
-                  ListTile(
-                    leading: const Icon(Icons.location_on),
-                    title: const Text('Manage Business Location'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const LocationManagementScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                ListTile(
-                  leading: const Icon(Icons.help),
-                  title: const Text('Help & Support'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    // Navigate to help
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.info),
-                  title: const Text('About'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    // Show about dialog
-                    showAboutDialog(
-                      context: context,
-                      applicationName: 'MealDeal',
-                      applicationVersion: '1.0.0',
-                      applicationLegalese: '© 2024 MealDeal. All rights reserved.',
-                      children: [
-                        const Text('Reducing food waste, one meal at a time.'),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 24),
-                
-                // Logout button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Sign Out'),
-                          content: const Text('Are you sure you want to sign out?'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Text('Cancel'),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                                authService.signOut();
-                              },
-                              child: const Text('Sign Out'),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red.shade600,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    child: const Text('Sign Out'),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
+    return Scaffold(
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildUserCard(context, auth, userData),
+            const SizedBox(height: 16),
+
+            if (isConsumer) _buildPurchases(context),
+            if (isConsumer) const SizedBox(height: 16),
+            if (isConsumer) _buildClaims(context, auth),
+            if (isConsumer) const SizedBox(height: 16),
+
+            if (auth.hasRole('food_provider')) _buildListings(context, auth),
+            if (auth.hasRole('food_provider')) const SizedBox(height: 16),
+
+            _buildMenu(context, auth),
+            const SizedBox(height: 24),
+
+            _buildLogoutButton(context, auth),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildClaimsList(BuildContext context, AuthService authService) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('cart')
-          .where('consumer_id', isEqualTo: authService.currentUser!.uid)
-          .where('status', whereIn: ['awaiting_pickup', 'claimed'])
-          .limit(10)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (snapshot.hasError) {
-          return Text('Error: ${snapshot.error}');
-        }
-
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              children: [
-                Icon(Icons.receipt_long, size: 32, color: Colors.grey.shade400),
-                const SizedBox(height: 8),
-                Text(
-                  'No orders yet',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w500,
-                  ),
+  Widget _buildUserCard(
+      BuildContext context, AuthService auth, dynamic userData) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 25,
+              backgroundColor: Colors.green.shade200,
+              child: Text(
+                userData?['name']?[0]?.toUpperCase() ?? 'U',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green.shade800,
                 ),
-                Text(
-                  'Your order history will appear here',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade500,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _userInfo(auth, userData),
+            ),
+            IconButton(
+              icon: Icon(Icons.edit, size: 18, color: Colors.grey.shade600),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _userInfo(AuthService auth, dynamic userData) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          userData?['name'] ?? 'Unknown User',
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        Text(
+          userData?['email'] ?? '',
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+        ),
+        Container(
+          margin: const EdgeInsets.only(top: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: auth.hasRole('food_provider')
+                ? Colors.blue.shade100
+                : Colors.green.shade100,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            auth.hasRole('food_provider') ? 'Food Provider' : 'Food Consumer',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: auth.hasRole('food_provider')
+                  ? Colors.blue.shade700
+                  : Colors.green.shade700,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPurchases(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text('My Purchases',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const Spacer(),
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const MyOrdersScreen(),
+                      ),
+                    );
+                  },
+                  child: const Row(
+                    children: [Text('History'), Icon(Icons.chevron_right)],
                   ),
                 ),
               ],
             ),
-          );
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _PurchaseTile(
+                    icon: Icons.restaurant_outlined,
+                    label: 'Preparing',
+                    onTap: () => _openOrders(context, 'pending')),
+                _PurchaseTile(
+                    icon: Icons.local_shipping_outlined,
+                    label: 'Ready for Pickup',
+                    onTap: () => _openOrders(context, 'awaiting_pickup')),
+                _PurchaseTile(
+                    icon: Icons.check_circle_outline,
+                    label: 'Picked Up',
+                    onTap: () => _openOrders(context, 'claimed')),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openOrders(BuildContext context, String filter) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MyOrdersScreen(initialFilter: filter),
+      ),
+    );
+  }
+
+  Widget _buildClaims(BuildContext context, AuthService auth) {
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const MyClaimsScreen()),
+        );
+      },
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.receipt_long,
+                      color: Colors.green.shade600, size: 20),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'My Claims',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const Spacer(),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _buildClaimsPreview(auth),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClaimsPreview(AuthService auth) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('cart')
+          .where('consumer_id', isEqualTo: auth.currentUser!.uid)
+          .where('status', whereIn: ['awaiting_pickup', 'claimed'])
+          .limit(10)
+          .snapshots()
+          .handleError((error) {
+            debugPrint('Claims stream error: $error');
+            return <QueryDocumentSnapshot>[];
+          }),
+      builder: (context, snap) {
+        if (snap.hasError) {
+          return _emptyState(Icons.error_outline, 'Connection error',
+              'Unable to load orders. Please check your connection.');
+        }
+        
+        if (!snap.hasData || snap.data!.docs.isEmpty) {
+          return _emptyState(Icons.receipt_long, 'No orders yet',
+              'Your order history will appear here');
         }
 
-        final docs = snapshot.data!.docs.toList()
+        final docs = snap.data!.docs.toList()
           ..sort((a, b) {
-            final aMap = a.data() as Map<String, dynamic>?;
-            final bMap = b.data() as Map<String, dynamic>?;
-            final aTs = aMap?['checkout_date'];
-            final bTs = bMap?['checkout_date'];
-            if (aTs is! Timestamp && bTs is! Timestamp) return 0;
-            if (aTs is! Timestamp) return 1;
-            if (bTs is! Timestamp) return -1;
-            return bTs.compareTo(aTs);
+            final aTs =
+                (a.data() as Map<String, dynamic>)['checkout_date'] as Timestamp?;
+            final bTs =
+                (b.data() as Map<String, dynamic>)['checkout_date'] as Timestamp?;
+            return -aTs!.compareTo(bTs!);
           });
-        return Column(
-          children: docs.take(3).map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return _buildClaimItem(context, data);
-          }).toList(),
-        );
+
+        return Column(children: docs.take(3).map(_claimTile).toList());
       },
     );
   }
 
-  Widget _buildClaimItem(BuildContext context, Map<String, dynamic> data) {
-    final items = data['items'] as List<dynamic>? ?? [];
-    final totalPrice = data['total_price'] ?? 0.0;
-    final checkoutDate = (data['checkout_date'] ?? Timestamp.now()) as Timestamp;
-    final dateStr = DateFormat('MMM dd, yyyy').format(checkoutDate.toDate());
+  Widget _claimTile(QueryDocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    final items = data['items'] ?? [];
+    final total = data['total_price'] ?? 0.0;
+    final date = (data['checkout_date'] as Timestamp).toDate();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
+      decoration: _boxDecoration(),
       child: Row(
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Colors.green.shade100,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              Icons.receipt,
-              color: Colors.green.shade600,
-              size: 20,
-            ),
-          ),
+          _iconBox(Icons.receipt, Colors.green),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '${items.length} item${items.length > 1 ? 's' : ''}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w500,
-                    fontSize: 14,
-                  ),
-                ),
-                Text(
-                  dateStr,
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 12,
-                  ),
-                ),
+                Text('${items.length} item(s)',
+                    style:
+                        const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+                Text(DateFormat('MMM dd, yyyy').format(date),
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
               ],
             ),
           ),
-          Text(
-            '₱${totalPrice.toStringAsFixed(0)}',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.green.shade700,
-              fontSize: 14,
-            ),
-          ),
+          Text('₱${total.toStringAsFixed(0)}',
+              style: TextStyle(
+                  color: Colors.green.shade700,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14)),
         ],
       ),
     );
   }
 
-  Widget _buildListingsList(BuildContext context, AuthService authService) {
+  Widget _buildListings(BuildContext context, AuthService auth) {
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const MyListingsScreen()),
+        );
+      },
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.inventory_2,
+                      color: Colors.orange.shade600, size: 20),
+                  const SizedBox(width: 8),
+                  const Text('My Listings',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _buildListingsPreview(auth),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildListingsPreview(AuthService auth) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('listings')
-          .where('provider_id', isEqualTo: authService.currentUser!.uid)
+          .where('provider_id', isEqualTo: auth.currentUser!.uid)
           .where('status', whereIn: ['active', 'sold_out'])
           .limit(10)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          .snapshots()
+          .handleError((error) {
+            debugPrint('Listings stream error: $error');
+            return <QueryDocumentSnapshot>[];
+          }),
+      builder: (context, snap) {
+        if (snap.hasError) {
+          return _emptyState(Icons.error_outline, 'Connection error',
+              'Unable to load listings. Please check your connection.');
+        }
+        
+        if (!snap.hasData || snap.data!.docs.isEmpty) {
+          return _emptyState(Icons.inventory_2, 'No listings yet',
+              'Create your first food listing');
         }
 
-        if (snapshot.hasError) {
-          return Text('Error: ${snapshot.error}');
-        }
-
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              children: [
-                Icon(Icons.inventory_2, size: 32, color: Colors.grey.shade400),
-                const SizedBox(height: 8),
-                Text(
-                  'No listings yet',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                Text(
-                  'Create your first food listing',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade500,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-
-        final docs = snapshot.data!.docs.toList()
+        final docs = snap.data!.docs.toList()
           ..sort((a, b) {
-            final aMap = a.data() as Map<String, dynamic>?;
-            final bMap = b.data() as Map<String, dynamic>?;
-            final aTs = aMap?['created_at'];
-            final bTs = bMap?['created_at'];
-            if (aTs is! Timestamp && bTs is! Timestamp) return 1;
-            if (aTs is! Timestamp) return 1;
-            if (bTs is! Timestamp) return -1;
-            return bTs.compareTo(aTs);
+            final aTs =
+                (a.data() as Map<String, dynamic>)['created_at'] as Timestamp?;
+            final bTs =
+                (b.data() as Map<String, dynamic>)['created_at'] as Timestamp?;
+            return -aTs!.compareTo(bTs!);
           });
-        return Column(
-          children: docs.take(3).map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return _buildListingItem(context, doc.id, data);
-          }).toList(),
-        );
+
+        return Column(children: docs.take(3).map(_listingTile).toList());
       },
     );
   }
 
-  Widget _buildListingItem(BuildContext context, String listingId, Map<String, dynamic> data) {
-    final title = data['title'] ?? 'Untitled';
-    final price = data['discounted_price'] ?? 0.0;
-    final quantity = data['quantity'] ?? 0;
-    final status = data['status'] ?? 'active';
+  Widget _listingTile(QueryDocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
     final images = (data['images'] as List?)?.cast<String>() ?? [];
     final image = images.isNotEmpty ? images.first : null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
+      decoration: _boxDecoration(),
       child: Row(
         children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              color: Colors.orange.shade100,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: image != null
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      image,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Icon(
-                          Icons.fastfood,
-                          color: Colors.orange.shade600,
-                          size: 20,
-                        );
-                      },
-                    ),
-                  )
-                : Icon(
-                    Icons.fastfood,
-                    color: Colors.orange.shade600,
-                    size: 20,
-                  ),
-          ),
+          _imageBox(image),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(data['title'] ?? 'Untitled',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w500, fontSize: 14)),
                 Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w500,
-                    fontSize: 14,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  '₱${(data['discounted_price'] ?? 0).toStringAsFixed(0)} • Qty: ${data['quantity'] ?? 0}',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                 ),
-                Text(
-                  '₱${price.toStringAsFixed(0)} • Qty: $quantity',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 12,
-                  ),
-                ),
-                if (status == 'sold_out')
+                if (data['status'] == 'sold_out')
                   Container(
                     margin: const EdgeInsets.only(top: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: Colors.orange.shade100,
                       borderRadius: BorderRadius.circular(4),
@@ -835,36 +553,182 @@ class ProfileScreen extends StatelessWidget {
                     child: Text(
                       'SOLD OUT',
                       style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.orange.shade800,
-                        fontWeight: FontWeight.bold,
-                      ),
+                          color: Colors.orange.shade800,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold),
                     ),
                   ),
               ],
             ),
           ),
           Icon(
-            status == 'sold_out' ? Icons.pause_circle : Icons.check_circle,
-            color: status == 'sold_out' ? Colors.orange.shade600 : Colors.green.shade600,
+            data['status'] == 'sold_out'
+                ? Icons.pause_circle
+                : Icons.check_circle,
+            color: data['status'] == 'sold_out'
+                ? Colors.orange.shade600
+                : Colors.green.shade600,
             size: 20,
           ),
         ],
       ),
     );
   }
+
+  Widget _buildMenu(BuildContext context, AuthService auth) {
+    return Column(
+      children: [
+        ListTile(
+          leading: const Icon(Icons.message),
+          title: const Text('Messages'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ChatListScreen()),
+            );
+          },
+        ),
+        if (auth.hasRole('food_provider'))
+          ListTile(
+            leading: const Icon(Icons.location_on),
+            title: const Text('Manage Business Location'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LocationManagementScreen()),
+              );
+            },
+          ),
+        ListTile(
+          leading: const Icon(Icons.help),
+          title: const Text('Help & Support'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () {},
+        ),
+        ListTile(
+          leading: const Icon(Icons.info),
+          title: const Text('About'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () {
+            showAboutDialog(
+              context: context,
+              applicationName: 'MealDeal',
+              applicationVersion: '1.0.0',
+              applicationLegalese: '© 2024 MealDeal. All rights reserved.',
+              children: const [
+                Text('Reducing food waste, one meal at a time.'),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLogoutButton(BuildContext context, AuthService auth) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.red.shade600,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+        onPressed: () {
+          showDialog(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: const Text('Sign Out'),
+              content: const Text('Are you sure you want to sign out?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    auth.signOut();
+                  },
+                  child: const Text('Sign Out'),
+                ),
+              ],
+            ),
+          );
+        },
+        child: const Text('Sign Out'),
+      ),
+    );
+  }
+
+  Widget _emptyState(IconData icon, String title, String subtitle) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: _boxDecoration(),
+      child: Column(
+        children: [
+          Icon(icon, size: 32, color: Colors.grey.shade400),
+          const SizedBox(height: 8),
+          Text(title,
+              style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w500)),
+          Text(subtitle,
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+        ],
+      ),
+    );
+  }
+
+  BoxDecoration _boxDecoration() {
+    return BoxDecoration(
+      color: Colors.grey.shade50,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: Colors.grey.shade200),
+    );
+  }
+
+  Widget _iconBox(IconData icon, MaterialColor color) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: color.shade100,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(icon, color: color.shade600, size: 20),
+    );
+  }
+
+  Widget _imageBox(String? url) {
+    return Container(
+      width: 50,
+      height: 50,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        color: Colors.orange.shade100,
+      ),
+      child: url != null
+          ? ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.network(url, fit: BoxFit.cover),
+            )
+          : Icon(Icons.fastfood, color: Colors.orange.shade600),
+    );
+  }
 }
 
-class _PurchaseTile extends StatelessWidget {
-  const _PurchaseTile({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
 
+class _PurchaseTile extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+
+  const _PurchaseTile(
+      {required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -872,22 +736,16 @@ class _PurchaseTile extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: Icon(icon, size: 28, color: Colors.grey.shade800),
-                ),
-              ],
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Icon(icon, size: 28, color: Colors.grey.shade800),
             ),
             const SizedBox(height: 8),
             Text(label, style: const TextStyle(fontSize: 12)),

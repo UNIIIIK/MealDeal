@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once __DIR__ . '/../config/database.php';
 
 // Enhanced data fetching functions for real Firestore data
@@ -11,7 +11,7 @@ function getUserStats() {
     
     try {
         // Use a smaller limit to prevent stack overflow
-        $usersRef = $db->getCollection('users');
+        $usersRef = $db->collection('users');
         $users = $usersRef->limit(100)->documents();
         
         $stats = [
@@ -79,7 +79,7 @@ function getListingStats() {
     global $db;
     
     try {
-        $listingsRef = $db->getCollection('listings');
+        $listingsRef = $db->collection('listings');
         $listings = $listingsRef->limit(50)->documents();
         
         $stats = [
@@ -154,7 +154,7 @@ function getOrderStats() {
     global $db;
     
     try {
-        $cartsRef = $db->getCollection('cart');
+        $cartsRef = $db->collection('cart');
         $carts = $cartsRef->limit(50)->documents();
         
         $stats = [
@@ -219,35 +219,8 @@ function getOrderStats() {
                         continue;
                     }
 
-                    // Fallback: look up the listing's weight field(s)
-                    try {
-                        if (isset($item['listing_id'])) {
-                            $listingDoc = $db->getDocument('listings', $item['listing_id'])->snapshot();
-                            if ($listingDoc->exists()) {
-                                $listingData = $listingDoc->data();
-                                $weightKg = 0;
-                                
-                                // Check for explicit weight fields first
-                                if (isset($listingData['weight_per_unit'])) {
-                                    $weightKg = floatval($listingData['weight_per_unit']);
-                                } elseif (isset($listingData['unit_weight_kg'])) {
-                                    $weightKg = floatval($listingData['unit_weight_kg']);
-                                } elseif (isset($listingData['weight'])) {
-                                    $weightKg = floatval($listingData['weight']);
-                                } else {
-                                    // Estimate weight based on food type and quantity
-                                    $weightKg = estimateFoodWeight($listingData, $quantity);
-                                }
-
-                                if ($weightKg > 0 && $quantity > 0) {
-                                    $stats['total_food_saved'] += ($quantity * $weightKg);
-                                }
-                            }
-                        }
-                    } catch (Exception $lookupEx) {
-                        // Best-effort only; do not fail stats on lookup issues
-                        error_log('OrderStats listing lookup failed: ' . $lookupEx->getMessage());
-                    }
+                    // Fallback: avoid extra Firestore lookups to prevent timeouts; estimate conservatively
+                    $stats['total_food_saved'] += ($quantity * 0.5); // default ~500g per item
                 }
             }
         }
@@ -277,7 +250,7 @@ function getReportStats() {
     global $db;
     
     try {
-        $reportsRef = $db->getCollection('reports');
+        $reportsRef = $db->collection('reports');
         $reports = $reportsRef->limit(50)->documents();
         
         $stats = [
@@ -360,85 +333,48 @@ function getReportStats() {
 }
 
 /**
- * Get top providers by performance
+ * Get top providers by performance (lightweight Firestore query)
  */
 function getTopProviders($limit = 10) {
     global $db;
-    
+
     try {
-        $usersRef = $db->getCollection('users');
-        $providers = $usersRef->where('role', '=', 'food_provider')->limit(300)->documents();
-        
+        // Lightweight leaderboard: rely only on aggregate fields stored on the
+        // user document to avoid heavy cross‑collection scans.
+        $usersRef = $db->collection('users');
+        $providers = $usersRef
+            ->where('role', '=', 'food_provider')
+            ->limit($limit * 3) // fetch a small pool, then sort in PHP
+            ->documents();
+
         $providerStats = [];
-        
+
         foreach ($providers as $provider) {
             $providerData = $provider->data();
-            $providerId = $provider->id();
-            
-            // Get provider's listings
-            $listingsRef = $db->getCollection('listings');
-            $providerListings = $listingsRef->where('provider_id', '=', $providerId)->limit(500)->documents();
-            
-            $stats = [
-                'id' => $providerId,
-                'name' => $providerData['name'] ?? 'Unknown',
-                'email' => $providerData['email'] ?? '',
-                'total_listings' => 0,
-                'active_listings' => 0,
-                'total_revenue' => 0,
-                'food_saved' => 0
+            $providerId   = $provider->id();
+
+            $providerStats[] = [
+                'id'              => $providerId,
+                'name'            => $providerData['name'] ?? 'Unknown',
+                'email'           => $providerData['email'] ?? '',
+                // Prefer pre‑calculated fields on the user doc if present
+                'total_listings'  => $providerData['total_listings']  ?? 0,
+                'active_listings' => $providerData['active_listings'] ?? 0,
+                'total_revenue'   => $providerData['total_revenue']   ?? 0,
+                'food_saved'      => $providerData['food_saved']      ?? 0,
+                'created_at'      => $providerData['created_at']      ?? ($providerData['timestamp'] ?? time()),
             ];
-            
-            foreach ($providerListings as $listing) {
-                $listingData = $listing->data();
-                $stats['total_listings']++;
-                
-                if (isset($listingData['status']) && $listingData['status'] === 'active') {
-                    $stats['active_listings']++;
-                }
-                
-                if (isset($listingData['discounted_price']) && isset($listingData['quantity'])) {
-                    $price = floatval($listingData['discounted_price']);
-                    $quantity = intval($listingData['quantity']);
-                    $stats['total_revenue'] += ($price * $quantity);
-                }
-                
-                // Calculate food saved from quantity
-                if (isset($listingData['quantity'])) {
-                    $quantity = intval($listingData['quantity']);
-                    if ($quantity > 0) {
-                        // Try to get weight from listing first
-                        if (isset($listingData['weight_per_unit'])) {
-                            $weight = floatval($listingData['weight_per_unit']);
-                        } else {
-                            // Estimate weight based on food type
-                            $weight = estimateFoodWeight($listingData, $quantity);
-                        }
-                        $stats['food_saved'] += ($weight * $quantity);
-                    }
-                }
+        }
+
+        // Sort primarily by food_saved, then by total_revenue
+        usort($providerStats, function ($a, $b) {
+            if ($b['food_saved'] == $a['food_saved']) {
+                return $b['total_revenue'] <=> $a['total_revenue'];
             }
-            
-            $providerStats[] = $stats;
-        }
-        
-        // Sort by total revenue (descending)
-        usort($providerStats, function($a, $b) {
-            return $b['total_revenue'] <=> $a['total_revenue'];
+            return $b['food_saved'] <=> $a['food_saved'];
         });
-        
-        // Return top providers, but ensure we have at least some data
-        $topProviders = array_slice($providerStats, 0, $limit);
-        
-        // If no providers with revenue, sort by food saved instead
-        if (empty($topProviders) || $topProviders[0]['total_revenue'] == 0) {
-            usort($providerStats, function($a, $b) {
-                return $b['food_saved'] <=> $a['food_saved'];
-            });
-            $topProviders = array_slice($providerStats, 0, $limit);
-        }
-        
-        return $topProviders;
+
+        return array_slice($providerStats, 0, $limit);
     } catch (Exception $e) {
         error_log("Error getting top providers: " . $e->getMessage());
         return [];
@@ -446,64 +382,52 @@ function getTopProviders($limit = 10) {
 }
 
 /**
- * Get top consumers by activity
+ * Get top consumers by activity (lightweight Firestore query)
  */
 function getTopConsumers($limit = 10) {
     global $db;
-    
+
     try {
-        $usersRef = $db->getCollection('users');
-        $consumers = $usersRef->where('role', '=', 'food_consumer')->limit(300)->documents();
-        
+        // Lightweight leaderboard for consumers, using only user‑level aggregates.
+        $usersRef = $db->collection('users');
+        $consumers = $usersRef
+            ->where('role', '=', 'food_consumer')
+            ->limit($limit * 3)
+            ->documents();
+
         $consumerStats = [];
-        
+
         foreach ($consumers as $consumer) {
             $consumerData = $consumer->data();
-            $consumerId = $consumer->id();
-            
-            // Get consumer's orders
-            $cartsRef = $db->getCollection('cart');
-            $consumerOrders = $cartsRef->where('consumer_id', '=', $consumerId)->limit(500)->documents();
-            
-            $stats = [
-                'id' => $consumerId,
-                'name' => $consumerData['name'] ?? 'Unknown',
-                'email' => $consumerData['email'] ?? '',
-                'total_orders' => 0,
-                'completed_orders' => 0,
-                'total_spent' => 0,
-                'total_savings' => 0
+            $consumerId   = $consumer->id();
+
+            $consumerStats[] = [
+                'id'               => $consumerId,
+                'name'             => $consumerData['name'] ?? 'Unknown',
+                'email'            => $consumerData['email'] ?? '',
+                'total_orders'     => $consumerData['total_orders']     ?? 0,
+                'completed_orders' => $consumerData['completed_orders'] ?? 0,
+                'total_spent'      => $consumerData['total_spent']      ?? 0,
+                'total_savings'    => $consumerData['total_savings']    ?? 0,
+                'created_at'       => $consumerData['created_at']       ?? ($consumerData['timestamp'] ?? time()),
             ];
-            
-            foreach ($consumerOrders as $order) {
-                $orderData = $order->data();
-                $stats['total_orders']++;
-                
-                if (isset($orderData['status']) && $orderData['status'] === 'completed') {
-                    $stats['completed_orders']++;
-                }
-                
-                if (isset($orderData['total_price'])) {
-                    $price = floatval($orderData['total_price']);
-                    $stats['total_spent'] += $price;
-                    $stats['total_savings'] += ($price * 0.5); // Assuming 50% savings
-                }
-            }
-            
-            $consumerStats[] = $stats;
         }
-        
-        // Sort by total spent
-        usort($consumerStats, function($a, $b) {
-            return $b['total_spent'] - $a['total_spent'];
+
+        // Sort by total_savings, then by total_orders
+        usort($consumerStats, function ($a, $b) {
+            if ($b['total_savings'] == $a['total_savings']) {
+                return $b['total_orders'] <=> $a['total_orders'];
+            }
+            return $b['total_savings'] <=> $a['total_savings'];
         });
-        
+
         return array_slice($consumerStats, 0, $limit);
     } catch (Exception $e) {
         error_log("Error getting top consumers: " . $e->getMessage());
         return [];
     }
 }
+
 
 /**
  * Estimate food weight based on listing data
@@ -576,3 +500,4 @@ function getComprehensiveDashboardStats() {
     ];
 }
 ?>
+

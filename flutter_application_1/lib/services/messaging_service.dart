@@ -1,3 +1,5 @@
+// optimized: services/messaging_service.dart
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,53 +9,89 @@ class MessagingService extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Get current user ID
   String? get currentUserId => _auth.currentUser?.uid;
 
-  // Get conversations for current user
-  Stream<List<Conversation>> getConversations() {
-    if (currentUserId == null) return Stream.value([]);
+  // In-memory caches to avoid repeated reads
+  final Map<String, ChatUser> _userCache = {};
+  final Map<String, Conversation> _conversationCache = {};
 
+  // Pagination default
+  static const int pageSize = 50;
+
+  // -------------------------
+  // Conversations stream (ordered server-side)
+  // -------------------------
+  Stream<List<Conversation>> getConversations() {
+    final uid = currentUserId;
+    if (uid == null) return Stream.value([]);
+
+    // Order by lastMessageTime on server to avoid client sorting work
     return _firestore
         .collection('conversations')
-        .where('participants', arrayContains: currentUserId)
+        .where('participants', arrayContains: uid)
+        .orderBy('lastMessageTime', descending: true)
         .snapshots()
-        .map((snapshot) {
-      final conversations = snapshot.docs.map((doc) {
+        .map((snap) {
+      final conversations = snap.docs.map((doc) {
         try {
-          return Conversation.fromMap(doc.data(), doc.id);
+          final conv = Conversation.fromMap(doc.data(), doc.id);
+          _conversationCache[doc.id] = conv; // cache
+          return conv;
         } catch (e) {
           debugPrint('Error parsing conversation ${doc.id}: $e');
           return null;
         }
-      }).where((conversation) => conversation != null).cast<Conversation>().toList();
-      
-      // Sort by lastMessageTime descending
-      conversations.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
-      
+      }).where((c) => c != null).cast<Conversation>().toList();
       return conversations;
-    }).handleError((error) {
-      debugPrint('Error in getConversations stream: $error');
+    }).handleError((err) {
+      debugPrint('getConversations stream error: $err');
       return <Conversation>[];
     });
   }
 
-  // Get messages for a specific conversation
-  Stream<List<Message>> getMessages(String conversationId) {
+  // -------------------------
+  // Messages stream (latest page + pagination support)
+  // - returns newest messages first (descending) for efficient queries.
+  // - client can reverse to display chronological order.
+  // -------------------------
+  Stream<List<Message>> getLatestMessages(String conversationId, {int limit = pageSize}) {
     return _firestore
         .collection('conversations')
         .doc(conversationId)
         .collection('messages')
-        .orderBy('timestamp', descending: false)
+        .orderBy('timestamp', descending: true)
+        .limit(limit)
         .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        return Message.fromMap(doc.data(), doc.id);
-      }).toList();
-    });
+        .map((snap) => snap.docs.map((d) => Message.fromMap(d.data(), d.id)).toList())
+        .handleError((e) {
+          debugPrint('getLatestMessages error: $e');
+          return <Message>[];
+        });
   }
 
-  // Send a message
+  // Fetch older messages before a given Timestamp for pagination (one-time fetch)
+  Future<List<Message>> fetchOlderMessages(String conversationId, DateTime before,
+      {int limit = pageSize}) async {
+    try {
+      final snap = await _firestore
+          .collection('conversations')
+          .doc(conversationId)
+          .collection('messages')
+          .orderBy('timestamp', descending: true)
+          .startAfter([Timestamp.fromDate(before)])
+          .limit(limit)
+          .get();
+
+      return snap.docs.map((d) => Message.fromMap(d.data(), d.id)).toList();
+    } catch (e) {
+      debugPrint('fetchOlderMessages error: $e');
+      return [];
+    }
+  }
+
+  // -------------------------
+  // Send message (atomic-ish): write message, update conversation, create notification
+  // -------------------------
   Future<void> sendMessage({
     required String conversationId,
     required String receiverId,
@@ -62,79 +100,82 @@ class MessagingService extends ChangeNotifier {
     String? listingId,
     Map<String, dynamic>? metadata,
   }) async {
-    if (currentUserId == null) throw Exception('User not authenticated');
+    final uid = currentUserId;
+    if (uid == null) throw Exception('User not authenticated');
+
+    final messageRef = _firestore
+        .collection('conversations')
+        .doc(conversationId)
+        .collection('messages')
+        .doc();
+
+    final now = DateTime.now();
+
+    final message = Message(
+      id: messageRef.id,
+      conversationId: conversationId,
+      senderId: uid,
+      receiverId: receiverId,
+      content: content,
+      type: type,
+      timestamp: now,
+      listingId: listingId,
+      metadata: metadata,
+    );
+
+    final batch = _firestore.batch();
+    batch.set(messageRef, message.toMap());
+    batch.update(_firestore.collection('conversations').doc(conversationId), {
+      'lastMessageId': message.id,
+      'lastMessageContent': content,
+      'lastMessageTime': Timestamp.fromDate(now),
+      'lastMessageSenderId': uid,
+      'unreadCount': FieldValue.increment(1),
+    });
 
     try {
-      final messageRef = _firestore
-          .collection('conversations')
-          .doc(conversationId)
-          .collection('messages')
-          .doc();
-
-      final message = Message(
-        id: messageRef.id,
-        conversationId: conversationId,
-        senderId: currentUserId!,
-        receiverId: receiverId,
-        content: content,
-        type: type,
-        timestamp: DateTime.now(),
-        listingId: listingId,
-        metadata: metadata,
-      );
-
-      // Add message to conversation
-      await messageRef.set(message.toMap());
-
-      // Update conversation with last message info
-      await _firestore.collection('conversations').doc(conversationId).update({
-        'lastMessageId': message.id,
-        'lastMessageContent': content,
-        'lastMessageTime': Timestamp.fromDate(message.timestamp),
-        'lastMessageSenderId': currentUserId!,
-        'unreadCount': FieldValue.increment(1),
-      });
-
-      // Create notification for receiver
-      await _createMessageNotification(receiverId, content, conversationId);
-
+      await batch.commit();
+      // Fire-and-forget notification (don't block UI on network flakiness)
+      unawaited(_createMessageNotification(receiverId, content, conversationId));
     } catch (e) {
-      debugPrint('Error sending message: $e');
+      debugPrint('sendMessage failed: $e');
       rethrow;
     }
   }
 
-  // Create or get existing conversation between two users
+  // -------------------------
+  // Create or reuse conversation (minimize list reads)
+  // -------------------------
   Future<String> createOrGetConversation({
     required String otherUserId,
     String? listingId,
   }) async {
-    if (currentUserId == null) throw Exception('User not authenticated');
+    final uid = currentUserId;
+    if (uid == null) throw Exception('User not authenticated');
 
     try {
-      // Check if conversation already exists
-      final existingConversation = await _firestore
+      // Query conversations where both participants exist (server-side array-contains can't match both,
+      // so filter locally but we keep server-side index for speed)
+      final snap = await _firestore
           .collection('conversations')
-          .where('participants', arrayContains: currentUserId)
+          .where('participants', arrayContains: uid)
+          .limit(50) // safety limit to avoid scanning thousands
           .get();
 
-      for (var doc in existingConversation.docs) {
+      for (final doc in snap.docs) {
         final data = doc.data();
         final participants = List<String>.from(data['participants'] ?? []);
-        
-        if (participants.contains(otherUserId) && 
+        if (participants.contains(otherUserId) &&
             participants.length == 2 &&
             (listingId == null || data['listingId'] == listingId)) {
           return doc.id;
         }
       }
 
-      // Create new conversation
-      final conversationRef = _firestore.collection('conversations').doc();
-      
-      final conversation = Conversation(
-        id: conversationRef.id,
-        participants: [currentUserId!, otherUserId],
+      final ref = _firestore.collection('conversations').doc();
+      final conv = Conversation(
+        id: ref.id,
+        participants: [uid, otherUserId],
         listingId: listingId,
         lastMessageId: '',
         lastMessageContent: '',
@@ -142,91 +183,90 @@ class MessagingService extends ChangeNotifier {
         lastMessageSenderId: '',
         unreadCount: 0,
       );
-
-      await conversationRef.set(conversation.toMap());
-      return conversationRef.id;
-
+      await ref.set(conv.toMap());
+      _conversationCache[ref.id] = conv;
+      return ref.id;
     } catch (e) {
-      debugPrint('Error creating conversation: $e');
+      debugPrint('createOrGetConversation error: $e');
       rethrow;
     }
   }
 
-  // Mark messages as read
+  // -------------------------
+  // Mark messages as read (batch, careful)
+  // -------------------------
   Future<void> markMessagesAsRead(String conversationId) async {
-    if (currentUserId == null) return;
+    final uid = currentUserId;
+    if (uid == null) return;
 
     try {
-      // Reset unread count for current user
-      await _firestore.collection('conversations').doc(conversationId).update({
-        'unreadCount': 0,
-      });
-
-      // Mark individual messages as read
-      final messagesQuery = await _firestore
+      // Only proceed if there are unread messages for this user
+      final unreadQuery = await _firestore
           .collection('conversations')
           .doc(conversationId)
           .collection('messages')
-          .where('receiverId', isEqualTo: currentUserId)
+          .where('receiverId', isEqualTo: uid)
           .where('isRead', isEqualTo: false)
+          .limit(200) // safety cap
           .get();
+
+      if (unreadQuery.docs.isEmpty) {
+        // Optionally set unreadCount to 0 for conversation doc - safer to check first
+        await _firestore.collection('conversations').doc(conversationId).update({'unreadCount': 0});
+        return;
+      }
 
       final batch = _firestore.batch();
-      for (var doc in messagesQuery.docs) {
+      for (final doc in unreadQuery.docs) {
         batch.update(doc.reference, {'isRead': true});
       }
+      batch.update(_firestore.collection('conversations').doc(conversationId), {'unreadCount': 0});
       await batch.commit();
-
     } catch (e) {
-      debugPrint('Error marking messages as read: $e');
+      debugPrint('markMessagesAsRead error: $e');
     }
   }
 
-  // Get user information for chat
+  // -------------------------
+  // Participant info helpers with caching
+  // -------------------------
   Future<ChatUser?> getUserInfo(String userId) async {
+    if (userId.isEmpty) return null;
+    final cached = _userCache[userId];
+    if (cached != null) return cached;
+
     try {
-      final userDoc = await _firestore.collection('users').doc(userId).get();
-      if (userDoc.exists) {
-        return ChatUser.fromMap(userDoc.data()!, userDoc.id);
-      }
-      return null;
+      final doc = await _firestore.collection('users').doc(userId).get();
+      if (!doc.exists) return null;
+      final user = ChatUser.fromMap(doc.data()!, doc.id);
+      _userCache[userId] = user;
+      return user;
     } catch (e) {
-      debugPrint('Error getting user info: $e');
+      debugPrint('getUserInfo error: $e');
       return null;
     }
   }
 
-  // Get conversation participants info
+  // Return participant ChatUsers for conversation using cache & parallel fetch
   Future<List<ChatUser>> getConversationParticipants(String conversationId) async {
     try {
-      final conversationDoc = await _firestore
-          .collection('conversations')
-          .doc(conversationId)
-          .get();
+      final doc = await _firestore.collection('conversations').doc(conversationId).get();
+      if (!doc.exists) return [];
 
-      if (!conversationDoc.exists) return [];
-
-      final participants = List<String>.from(
-          conversationDoc.data()?['participants'] ?? []);
-
-      final List<ChatUser> users = [];
-      for (String userId in participants) {
-        final userInfo = await getUserInfo(userId);
-        if (userInfo != null) {
-          users.add(userInfo);
-        }
-      }
-
-      return users;
+      final participants = List<String>.from(doc.data()?['participants'] ?? []);
+      final futures = participants.map((id) => getUserInfo(id)).toList();
+      final results = await Future.wait(futures);
+      return results.whereType<ChatUser>().toList();
     } catch (e) {
-      debugPrint('Error getting conversation participants: $e');
+      debugPrint('getConversationParticipants error: $e');
       return [];
     }
   }
 
-  // Create message notification
-  Future<void> _createMessageNotification(
-      String receiverId, String content, String conversationId) async {
+  // -------------------------
+  // Notifications (fire-and-forget)
+  // -------------------------
+  Future<void> _createMessageNotification(String receiverId, String content, String conversationId) async {
     try {
       await _firestore.collection('notifications').add({
         'receiverId': receiverId,
@@ -237,37 +277,39 @@ class MessagingService extends ChangeNotifier {
         'read': false,
       });
     } catch (e) {
-      debugPrint('Error creating message notification: $e');
+      debugPrint('createMessageNotification error: $e');
     }
   }
 
-  // Get unread message count for current user
+  // -------------------------
+  // Unread count stream (keeps existing behavior)
+  // -------------------------
   Stream<int> getUnreadMessageCount() {
-    if (currentUserId == null) return Stream.value(0);
+    final uid = currentUserId;
+    if (uid == null) return Stream.value(0);
 
     return _firestore
         .collection('conversations')
-        .where('participants', arrayContains: currentUserId)
+        .where('participants', arrayContains: uid)
         .snapshots()
-        .map((snapshot) {
-      int totalUnread = 0;
-      for (var doc in snapshot.docs) {
+        .map((snap) {
+      int total = 0;
+      for (final doc in snap.docs) {
         final data = doc.data();
-        final lastMessageSenderId = data['lastMessageSenderId'] ?? '';
-        
-        // Only count as unread if the last message was not sent by current user
-        if (lastMessageSenderId != currentUserId) {
-          totalUnread += (data['unreadCount'] as num?)?.toInt() ?? 0;
+        final lastSender = data['lastMessageSenderId'] ?? '';
+        if (lastSender != uid) {
+          total += (data['unreadCount'] as num?)?.toInt() ?? 0;
         }
       }
-      return totalUnread;
+      return total;
     });
   }
 
-  // Delete conversation
+  // -------------------------
+  // Delete conversation (keeps same behavior)
+  // -------------------------
   Future<void> deleteConversation(String conversationId) async {
     try {
-      // Delete all messages in the conversation
       final messagesQuery = await _firestore
           .collection('conversations')
           .doc(conversationId)
@@ -275,90 +317,102 @@ class MessagingService extends ChangeNotifier {
           .get();
 
       final batch = _firestore.batch();
-      for (var doc in messagesQuery.docs) {
+      for (final doc in messagesQuery.docs) {
         batch.delete(doc.reference);
       }
-      
-      // Delete the conversation itself
       batch.delete(_firestore.collection('conversations').doc(conversationId));
-      
       await batch.commit();
+
+      _conversationCache.remove(conversationId);
     } catch (e) {
-      debugPrint('Error deleting conversation: $e');
+      debugPrint('deleteConversation error: $e');
       rethrow;
     }
   }
 
-  // Send system message (e.g., "User joined conversation")
+  // -------------------------
+  // Send system message (wrapper for sendMessage with system type)
+  // -------------------------
   Future<void> sendSystemMessage({
     required String conversationId,
     required String content,
     String? listingId,
   }) async {
-    if (currentUserId == null) return;
+    final uid = currentUserId;
+    if (uid == null) throw Exception('User not authenticated');
 
-    try {
-      final messageRef = _firestore
-          .collection('conversations')
-          .doc(conversationId)
-          .collection('messages')
-          .doc();
+    // Get conversation to find the other participant
+    final convDoc = await _firestore.collection('conversations').doc(conversationId).get();
+    if (!convDoc.exists) throw Exception('Conversation not found');
 
-      final message = Message(
-        id: messageRef.id,
-        conversationId: conversationId,
-        senderId: 'system',
-        receiverId: '',
-        content: content,
-        type: MessageType.system,
-        timestamp: DateTime.now(),
-        listingId: listingId,
-      );
+    final participants = List<String>.from(convDoc.data()?['participants'] ?? []);
+    final receiverId = participants.firstWhere((id) => id != uid, orElse: () => '');
 
-      await messageRef.set(message.toMap());
+    if (receiverId.isEmpty) throw Exception('Could not determine receiver');
 
-      // Update conversation with system message info
-      await _firestore.collection('conversations').doc(conversationId).update({
-        'lastMessageId': message.id,
-        'lastMessageContent': content,
-        'lastMessageTime': Timestamp.fromDate(message.timestamp),
-        'lastMessageSenderId': 'system',
-      });
-
-    } catch (e) {
-      debugPrint('Error sending system message: $e');
-    }
+    await sendMessage(
+      conversationId: conversationId,
+      receiverId: receiverId,
+      content: content,
+      type: MessageType.system,
+      listingId: listingId,
+    );
   }
 
-  // Search conversations
+  // -------------------------
+  // Search conversations (client-side filtering)
+  // -------------------------
   Stream<List<Conversation>> searchConversations(String query) {
-    if (currentUserId == null || query.isEmpty) return getConversations();
+    final uid = currentUserId;
+    if (uid == null) return Stream.value([]);
+
+    if (query.isEmpty) {
+      return getConversations();
+    }
+
+    final lowerQuery = query.toLowerCase();
 
     return _firestore
         .collection('conversations')
-        .where('participants', arrayContains: currentUserId)
+        .where('participants', arrayContains: uid)
+        .orderBy('lastMessageTime', descending: true)
         .snapshots()
-        .map((snapshot) {
-      final conversations = snapshot.docs.map((doc) {
+        .asyncMap((snap) async {
+      final allConversations = <Conversation>[];
+      
+      for (final doc in snap.docs) {
         try {
-          return Conversation.fromMap(doc.data(), doc.id);
+          final conv = Conversation.fromMap(doc.data(), doc.id);
+          _conversationCache[doc.id] = conv;
+          
+          // Check if last message content matches
+          if (conv.lastMessageContent.toLowerCase().contains(lowerQuery)) {
+            allConversations.add(conv);
+            continue;
+          }
+          
+          // Check if any participant name matches (need to fetch user info)
+          bool matches = false;
+          for (final participantId in conv.participants) {
+            if (participantId == uid) continue;
+            final user = await getUserInfo(participantId);
+            if (user != null && user.name.toLowerCase().contains(lowerQuery)) {
+              matches = true;
+              break;
+            }
+          }
+          
+          if (matches) {
+            allConversations.add(conv);
+          }
         } catch (e) {
           debugPrint('Error parsing conversation ${doc.id}: $e');
-          return null;
         }
-      }).where((conversation) => conversation != null).cast<Conversation>().toList();
+      }
       
-      // Filter by search query
-      final filteredConversations = conversations.where((conversation) {
-        return conversation.lastMessageContent.toLowerCase().contains(query.toLowerCase());
-      }).toList();
-      
-      // Sort by lastMessageTime descending
-      filteredConversations.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
-      
-      return filteredConversations;
-    }).handleError((error) {
-      debugPrint('Error in searchConversations stream: $error');
+      return allConversations;
+    }).handleError((err) {
+      debugPrint('searchConversations stream error: $err');
       return <Conversation>[];
     });
   }

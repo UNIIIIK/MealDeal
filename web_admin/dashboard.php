@@ -1,40 +1,84 @@
 <?php
+// dashboard.php
 session_start();
-require_once 'config/database.php';
-require_once 'includes/auth.php';
-require_once 'includes/data_functions.php';
 
-// Check if admin is logged in
-if (!isAdminLoggedIn()) {
-    header('Location: login.php');
-    exit();
+// Simple auth check
+if (!isset($_SESSION['admin_id'])) {
+    header("Location: login.php");
+    exit;
 }
-
-// Defer expensive dashboard queries to the client via API to prevent timeouts
-$comprehensiveStats = [
-    'users' => ['total_users' => 0, 'providers' => 0, 'consumers' => 0, 'verified_users' => 0, 'recent_signups' => 0],
-    'listings' => ['active_listings' => 0, 'total_revenue' => 0],
-    'reports' => ['pending_reports' => 0, 'total_reports' => 0, 'recent_reports' => []],
-    'orders' => ['total_food_saved' => 0, 'total_savings' => 0, 'total_orders' => 0, 'completed_orders' => 0, 'average_order_value' => 0],
-    'top_providers' => []
-];
-$stats = $comprehensiveStats['orders'];
-$stats['pending_reports'] = $comprehensiveStats['reports']['pending_reports'];
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MealDeal Super Admin Dashboard</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="assets/css/admin.css" rel="stylesheet">
+    <title>MealDeal Admin Dashboard</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background: #f7f9fc; }
+        .container { padding: 20px; }
+        h1 { margin-bottom: 20px; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+        }
+        .card {
+            background: #fff;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .card h2 { margin: 10px 0; font-size: 28px; color: #2c3e50; }
+        .card span { font-size: 14px; color: #7f8c8d; }
+    </style>
 </head>
 <body>
-    <?php include 'index.php'; /* Reuse the existing dashboard markup via inclusion if needed */ ?>
+<div class="container">
+    <h1>Admin Dashboard</h1>
+    <div class="stats-grid">
+        <div class="card">
+            <h2 id="users_count">--</h2>
+            <span>Users</span>
+        </div>
+        <div class="card">
+            <h2 id="posts_count">--</h2>
+            <span>Food Posts</span>
+        </div>
+        <div class="card">
+            <h2 id="orders_count">--</h2>
+            <span>Orders</span>
+        </div>
+        <div class="card">
+            <h2 id="revenue_total">--</h2>
+            <span>Total Revenue</span>
+        </div>
+    </div>
+</div>
+
+<script>
+async function loadStats() {
+    try {
+        const res = await fetch('api/dashboard_stats.php');
+        const data = await res.json();
+
+        if (data.success) {
+            document.getElementById('users_count').textContent   = data.stats.users_count;
+            document.getElementById('posts_count').textContent   = data.stats.posts_count;
+            document.getElementById('orders_count').textContent  = data.stats.orders_count;
+            document.getElementById('revenue_total').textContent = 
+                new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
+                .format(data.stats.revenue_total);
+        } else {
+            console.error('Error loading stats:', data.error);
+        }
+    } catch (err) {
+        console.error('Request failed:', err);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadStats);
+</script>
 </body>
 </html>
-
-

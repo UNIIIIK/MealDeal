@@ -64,22 +64,64 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
     </style>
 </head>
 <body>
+    <!-- Navigation (consistent with sidebar layout) -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-success">
         <div class="container-fluid">
             <a class="navbar-brand" href="index.php">MealDeal Super Admin</a>
             <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="dashboard.php">Dashboard</a>
-                <a class="nav-link active" href="users.php">Users</a>
-                <a class="nav-link" href="listings.php">Listings</a>
-                <a class="nav-link" href="reports.php">Reports</a>
-                <a class="nav-link" href="pricing.php">Pricing</a>
-                <a class="nav-link" href="impact.php">Impact</a>
                 <a class="nav-link" href="logout.php">Logout</a>
             </div>
         </div>
     </nav>
 
-    <div class="container py-4">
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-3 col-lg-2 d-md-block bg-light sidebar">
+                <div class="position-sticky pt-3">
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="index.php">
+                                <i class="bi bi-speedometer2 me-2"></i>Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="reports.php">
+                                <i class="bi bi-flag me-2"></i>Reports
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="users.php">
+                                <i class="bi bi-people me-2"></i>User Management
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="listings.php">
+                                <i class="bi bi-card-checklist me-2"></i>Content Moderation
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="leaderboard.php">
+                                <i class="bi bi-trophy me-2"></i>Leaderboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="impact.php">
+                                <i class="bi bi-graph-up me-2"></i>Impact Tracking
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="pricing.php">
+                                <i class="bi bi-tags me-2"></i>Pricing Control
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Main content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+    <div class="py-4">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1 class="h3 mb-0">User Management</h1>
             <div>
@@ -213,6 +255,9 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+            </main>
         </div>
     </div>
 

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET');
@@ -6,11 +6,23 @@ header('Access-Control-Allow-Headers: Content-Type');
 
 require_once __DIR__ . '/../config/database.php';
 
+// Allow slower Firestore responses on Windows/dev setups
+$scriptTimeout = getenv('MEALDEAL_API_TIMEOUT');
+$scriptTimeout = is_numeric($scriptTimeout) ? max(20, (int)$scriptTimeout) : 45;
+set_time_limit($scriptTimeout);
+
 try {
-    $db = Database::getInstance();
+    $db = Database::getInstance()->getFirestore();
     
     // Get listings for AI analysis
-    $listingsRef = $db->getCollection('listings');
+$analysisFields = [
+    'title',
+    'description',
+    'original_price',
+    'discounted_price'
+];
+
+$listingsRef = $db->collection('listings')->select($analysisFields);
     $listings = $listingsRef->limit(50)->documents();
     
     $analysis = [
@@ -114,3 +126,4 @@ try {
     ]);
 }
 ?>
+

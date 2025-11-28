@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET');
@@ -7,10 +7,10 @@ header('Access-Control-Allow-Headers: Content-Type');
 require_once __DIR__ . '/../config/database.php';
 
 try {
-    $db = Database::getInstance();
+    $db = Database::getInstance()->getFirestore();
     
     // Get recent reports that could be considered flags
-    $reportsRef = $db->getCollection('reports');
+    $reportsRef = $db->collection('reports');
     $reports = $reportsRef->limit(20)->documents();
     
     $flags = [];
@@ -67,3 +67,4 @@ try {
     ]);
 }
 ?>
+

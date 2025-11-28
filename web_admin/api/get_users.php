@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET');
@@ -26,8 +26,8 @@ function formatTimestamp($value) {
 }
 
 try {
-    $db = Database::getInstance();
-    $usersRef = $db->getCollection('users');
+    $db = Database::getInstance()->getFirestore();
+    $usersRef = $db->collection('users');
     
     $limit = isset($_GET['limit']) ? intval($_GET['limit']) : 50;
     $role = isset($_GET['role']) ? $_GET['role'] : null;
@@ -69,3 +69,4 @@ try {
     ]);
 }
 ?>
+

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -22,12 +23,19 @@ class _PickupRouteScreenState extends State<PickupRouteScreen> {
   String? _customerAddress;
   Map<String, dynamic>? _routeInfo; // Added _routeInfo
   Stream<DocumentSnapshot<Map<String, dynamic>>>? _cartStream;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _cartSubscription;
 
   @override
   void initState() {
     super.initState();
     _initializeLocations();
     _listenForProviderPickup();
+  }
+
+  @override
+  void dispose() {
+    _cartSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _initializeLocations() async {
@@ -87,19 +95,35 @@ class _PickupRouteScreenState extends State<PickupRouteScreen> {
         .doc(widget.cartId)
         .snapshots();
 
-    _cartStream!.listen((doc) async {
-      final data = doc.data() ?? {};
-      final status = data['status'] as String?;
-      if (!mounted) return;
-      if (status == 'claimed') {
-        // Navigate to confirmation screen when provider marks as picked up
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => _PickupConfirmationScreen(cartId: widget.cartId),
-          ),
-        );
-      }
-    });
+    _cartSubscription = _cartStream!.listen(
+      (doc) async {
+        if (!mounted) return;
+        try {
+          final data = doc.data() ?? {};
+          final status = data['status'] as String?;
+          if (status == 'claimed') {
+            // Navigate to confirmation screen when provider marks as picked up
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (_) => _PickupConfirmationScreen(cartId: widget.cartId),
+              ),
+            );
+          }
+        } catch (e) {
+          debugPrint('Error processing cart update: $e');
+        }
+      },
+      onError: (error) {
+        debugPrint('Cart stream error: $error');
+        // Retry connection after a delay
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted) {
+            _listenForProviderPickup();
+          }
+        });
+      },
+      cancelOnError: false,
+    );
   }
 
   Future<void> _calculateRoute() async {
@@ -354,75 +378,114 @@ class _PickupRouteScreenState extends State<PickupRouteScreen> {
     final centerLng = (_consumerLocation!.longitude + _providerLocation!.longitude) / 2;
     final center = ll.LatLng(centerLat, centerLng);
 
-    return FlutterMap(
-      options: MapOptions(
-        initialCenter: center,
-        initialZoom: 14.0,
-        minZoom: 13.0, // Constrain to Bogo City area
-        maxZoom: 18.0,
-      ),
-      children: [
-        TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.example.mealdeal',
-          tileProvider: NetworkTileProvider(),
-        ),
-        
-        // Route polyline
-        if (_routePoints.isNotEmpty)
-          PolylineLayer(
-            polylines: [
-              Polyline(
-                points: _routePoints,
-                strokeWidth: 4.0,
-                color: Colors.blue,
+    // Wrap map in error boundary to handle graphics errors
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        try {
+          return FlutterMap(
+            options: MapOptions(
+              initialCenter: center,
+              initialZoom: 14.0,
+              minZoom: 13.0, // Constrain to Bogo City area
+              maxZoom: 18.0,
+              onMapReady: () {
+                debugPrint('Map ready');
+              },
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.example.mealdeal',
+                tileProvider: NetworkTileProvider(),
+                maxNativeZoom: 19,
+                maxZoom: 18,
+                errorTileCallback: (tile, error, stackTrace) {
+                  debugPrint('Tile error: $error');
+                },
+              ),
+              
+              // Route polyline
+              if (_routePoints.isNotEmpty)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: _routePoints,
+                      strokeWidth: 4.0,
+                      color: Colors.blue,
+                    ),
+                  ],
+                ),
+              
+              // Markers
+              MarkerLayer(
+                markers: [
+                  // Consumer location marker
+                  Marker(
+                    point: _consumerLocation!,
+                    width: 40,
+                    height: 40,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.green,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: const Icon(
+                        Icons.person,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                  
+                  // Provider location marker
+                  Marker(
+                    point: _providerLocation!,
+                    width: 40,
+                    height: 40,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: const Icon(
+                        Icons.store,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
-          ),
-        
-        // Markers
-        MarkerLayer(
-          markers: [
-            // Consumer location marker
-            Marker(
-              point: _consumerLocation!,
-              width: 40,
-              height: 40,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.green,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
+          );
+        } catch (e) {
+          debugPrint('Map rendering error: $e');
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.map_outlined, size: 64, color: Colors.grey.shade400),
+                const SizedBox(height: 16),
+                Text(
+                  'Map unavailable',
+                  style: TextStyle(color: Colors.grey.shade600),
                 ),
-                child: const Icon(
-                  Icons.person,
-                  color: Colors.white,
-                  size: 20,
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      // Force rebuild
+                    });
+                  },
+                  child: const Text('Retry'),
                 ),
-              ),
+              ],
             ),
-            
-            // Provider location marker
-            Marker(
-              point: _providerLocation!,
-              width: 40,
-              height: 40,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.red,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
-                ),
-                child: const Icon(
-                  Icons.store,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
+          );
+        }
+      },
     );
   }
 }

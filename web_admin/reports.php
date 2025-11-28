@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 session_start();
 require_once 'config/database.php';
 require_once 'includes/auth.php';
@@ -162,8 +162,8 @@ $totalPages = getTotalReportPages($status);
                                                 <?php echo htmlspecialchars($rtype); ?>
                                             </span>
                                         </td>
-                                        <td><?php echo htmlspecialchars($report['reporter_name'] ?? '—'); ?></td>
-                                        <td><?php echo htmlspecialchars($report['target_name'] ?? '—'); ?></td>
+                                        <td><?php echo htmlspecialchars($report['reporter_name'] ?? 'â€”'); ?></td>
+                                        <td><?php echo htmlspecialchars($report['target_name'] ?? 'â€”'); ?></td>
                                         <td>
                                             <button class="btn btn-sm btn-link" onclick="viewReportDetails('<?php echo $report['id']; ?>')">
                                                 View Details
@@ -326,93 +326,62 @@ $totalPages = getTotalReportPages($status);
 function getReports($page = 1, $status = 'all', $limit = 20) {
     global $db;
     
+    $page = max(1, (int)$page);
+    $limit = max(1, (int)$limit);
+    $queryCap = $limit * $page;
+    
     try {
-        $reportsRef = $db->getCollection('reports');
+        $reportsRef = $db->collection('reports');
+        $query = $status !== 'all'
+            ? $reportsRef->where('status', '=', $status)
+            : $reportsRef->orderBy('created_at', 'desc');
         
-        // Apply status filter
-        if ($status !== 'all') {
-            // Avoid composite index requirement by skipping orderBy when filtering
-            $query = $reportsRef->where('status', '=', $status);
-            $snap = $query->documents();
-        } else {
-            // For all, order by created_at desc is fine
-            $snap = $reportsRef->orderBy('created_at', 'desc')->documents();
-        }
-        
+        $snap = $query->limit($queryCap)->documents();
         $allReports = [];
+        $userCache = [];
+        $listingCache = [];
+        
         foreach ($snap as $report) {
             $reportData = $report->data();
 
-            // Resolve names if not denormalized
             $reporterName = $reportData['reporter_name'] ?? ($reportData['reporter_email'] ?? null);
-            $targetName = $reportData['target_name'] ?? ($reportData['listing_title'] ?? ($reportData['provider_name'] ?? null));
+            if (!$reporterName && !empty($reportData['reporter_id'])) {
+                $reporterName = resolveUserDisplayName($reportData['reporter_id'], $userCache) ?? 'Anonymous';
+            }
 
-            try {
-                if (!$reporterName && isset($reportData['reporter_id'])) {
-                    $uSnap = $db->getDocument('users', $reportData['reporter_id'])->snapshot();
-                    if ($uSnap->exists()) {
-                        $uData = $uSnap->data();
-                        $reporterName = $uData['name'] ?? ($uData['email'] ?? 'Anonymous');
-                    }
+            $targetName = $reportData['target_name'] ?? ($reportData['listing_title'] ?? ($reportData['provider_name'] ?? null));
+            if (!$targetName && !empty($reportData['target_user_id'])) {
+                $targetName = resolveUserDisplayName($reportData['target_user_id'], $userCache);
+            }
+            if (!$targetName && !empty($reportData['target_listing_id'])) {
+                $targetName = resolveListingDisplayName($reportData['target_listing_id'], $listingCache, $userCache);
+            }
+            if (!$targetName && !empty($reportData['provider_id'])) {
+                $providerName = resolveUserDisplayName($reportData['provider_id'], $userCache);
+                $targetName = $reportData['listing_title'] ?? 'Listing';
+                if ($providerName) {
+                    $targetName .= ' &bull; ' . $providerName;
                 }
-                if (!$targetName && isset($reportData['target_user_id'])) {
-                    $tSnap = $db->getDocument('users', $reportData['target_user_id'])->snapshot();
-                    if ($tSnap->exists()) {
-                        $tData = $tSnap->data();
-                        $targetName = $tData['name'] ?? ($tData['email'] ?? '—');
-                    }
-                }
-                // If this report targets a listing, use listing title/provider
-                if (!$targetName && isset($reportData['target_listing_id'])) {
-                    $lSnap = $db->getDocument('listings', $reportData['target_listing_id'])->snapshot();
-                    if ($lSnap->exists()) {
-                        $lData = $lSnap->data();
-                        $targetName = $lData['title'] ?? ($lData['name'] ?? 'Listing');
-                        // Optional: append provider name if available
-                        if (isset($lData['provider_id'])) {
-                            $pSnap = $db->getDocument('users', $lData['provider_id'])->snapshot();
-                            if ($pSnap->exists()) {
-                                $pData = $pSnap->data();
-                                $providerName = $pData['name'] ?? ($pData['email'] ?? null);
-                                if ($providerName) {
-                                    $targetName .= ' • ' . $providerName;
-                                }
-                            }
-                        }
-                    }
-                }
-                // Alternate schema: provider_id present directly on report
-                if (!$targetName && isset($reportData['provider_id'])) {
-                    $pSnap = $db->getDocument('users', $reportData['provider_id'])->snapshot();
-                    if ($pSnap->exists()) {
-                        $pData = $pSnap->data();
-                        $targetName = ($reportData['listing_title'] ?? 'Listing') . ' • ' . ($pData['name'] ?? ($pData['email'] ?? 'Provider'));
-                    }
-                }
-            } catch (Exception $e) {
-                error_log('Report name resolution failed: ' . $e->getMessage());
             }
 
             $allReports[] = [
                 'id' => $report->id(),
                 'type' => $reportData['type'] ?? 'other',
                 'status' => $reportData['status'] ?? 'pending',
-                'reporter_name' => $reporterName ?? '—',
-                'target_name' => $targetName ?? '—',
+                'reporter_name' => $reporterName ?? '&mdash;',
+                'target_name' => $targetName ?? '&mdash;',
                 'description' => $reportData['description'] ?? '',
                 'created_at' => $reportData['created_at'] ?? null
             ];
         }
 
-        // Sort by created_at desc in-memory if not already sorted
         usort($allReports, function($a, $b) {
             $at = is_array($a['created_at']) ? ($a['created_at']['seconds'] ?? 0) : (is_numeric($a['created_at']) ? $a['created_at'] : 0);
             $bt = is_array($b['created_at']) ? ($b['created_at']['seconds'] ?? 0) : (is_numeric($b['created_at']) ? $b['created_at'] : 0);
             return $bt <=> $at;
         });
 
-        // Simple pagination with server-safe cap
-        $offset = max(0, ($page - 1) * $limit);
+        $offset = ($page - 1) * $limit;
         return array_slice($allReports, $offset, $limit);
     } catch (Exception $e) {
         error_log("Error getting reports: " . $e->getMessage());
@@ -420,11 +389,70 @@ function getReports($page = 1, $status = 'all', $limit = 20) {
     }
 }
 
+function resolveUserDisplayName($userId, array &$cache) {
+    global $db;
+
+    if (empty($userId)) {
+        return null;
+    }
+
+    if (array_key_exists($userId, $cache)) {
+        return $cache[$userId];
+    }
+
+    try {
+        $uSnap = $db->collection('users')->document($userId)->snapshot();
+        if ($uSnap->exists()) {
+            $data = $uSnap->data();
+            $cache[$userId] = $data['name'] ?? ($data['email'] ?? null);
+            return $cache[$userId];
+        }
+    } catch (Exception $e) {
+        error_log('User lookup failed: ' . $e->getMessage());
+    }
+
+    $cache[$userId] = null;
+    return null;
+}
+
+function resolveListingDisplayName($listingId, array &$listingCache, array &$userCache) {
+    global $db;
+
+    if (empty($listingId)) {
+        return null;
+    }
+
+    if (array_key_exists($listingId, $listingCache)) {
+        return $listingCache[$listingId];
+    }
+
+    try {
+        $lSnap = $db->collection('listings')->document($listingId)->snapshot();
+        if ($lSnap->exists()) {
+            $data = $lSnap->data();
+            $label = $data['title'] ?? ($data['name'] ?? 'Listing');
+            if (!empty($data['provider_id'])) {
+                $providerName = resolveUserDisplayName($data['provider_id'], $userCache);
+                if ($providerName) {
+                    $label .= ' &bull; ' . $providerName;
+                }
+            }
+            $listingCache[$listingId] = $label;
+            return $label;
+        }
+    } catch (Exception $e) {
+        error_log('Listing lookup failed: ' . $e->getMessage());
+    }
+
+    $listingCache[$listingId] = null;
+    return null;
+}
+
 function getTotalReportPages($status = 'all', $limit = 20) {
     global $db;
     
     try {
-        $reportsRef = $db->getCollection('reports');
+        $reportsRef = $db->collection('reports');
         
         // Counting all documents is expensive and can trigger long gRPC backoffs.
         // To keep the UI responsive, skip counting and assume a single page until
@@ -460,7 +488,7 @@ function getStatusColor($status) {
 
 function formatDate($timestamp) {
     if ($timestamp === null) {
-        return '—';
+        return 'â€”';
     }
     // Firestore PHP SDK may return Google\Cloud\Core\Timestamp objects
     if ($timestamp instanceof \Google\Cloud\Core\Timestamp) {
@@ -473,20 +501,20 @@ function formatDate($timestamp) {
         if ($seconds !== null) {
             return date('M j, Y g:i A', (int)$seconds);
         }
-        return '—';
+        return 'â€”';
     }
     // Or a UNIX seconds integer
     if (is_numeric($timestamp)) {
         return date('M j, Y g:i A', (int)$timestamp);
     }
-    return '—';
+    return 'â€”';
 }
 
 function handleReportAction($action, $reportId, $warningType, $adminNotes) {
     global $db;
     
     try {
-        $reportDoc = $db->getDocument('reports', $reportId);
+        $reportDoc = $db->collection('reports')->document($reportId);
         $reportData = $reportDoc->snapshot()->data();
         
         switch ($action) {
@@ -522,7 +550,7 @@ function issueWarning($userId, $warningType, $adminNotes, $reportId) {
     global $db;
     
     // Get user's current warnings
-    $userDoc = $db->getDocument('users', $userId);
+    $userDoc = $db->collection('users')->document($userId);
     $userData = $userDoc->snapshot()->data();
     $currentWarnings = $userData['warnings'] ?? [];
     
@@ -593,3 +621,4 @@ function logAdminAction($action, $data) {
     ]);
 }
 ?>
+

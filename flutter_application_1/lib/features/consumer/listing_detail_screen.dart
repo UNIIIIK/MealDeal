@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -30,6 +31,31 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   void initState() {
     super.initState();
     _loadProviderData();
+  }
+
+  bool _isDataUrl(String? value) {
+    if (value == null) return false;
+    return value.startsWith('data:image/');
+  }
+
+  Widget _buildImageFromUrl(String? url, {BoxFit fit = BoxFit.cover, Widget? fallback}) {
+    if (url == null || url.isEmpty) {
+      return fallback ?? const SizedBox.shrink();
+    }
+    if (_isDataUrl(url)) {
+      try {
+        final base64Part = url.split(',').last;
+        final bytes = base64Decode(base64Part);
+        return Image.memory(bytes, fit: fit);
+      } catch (_) {
+        return fallback ?? const SizedBox.shrink();
+      }
+    }
+    return Image.network(
+      url,
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) => fallback ?? const SizedBox.shrink(),
+    );
   }
 
   Future<void> _loadProviderData() async {
@@ -241,15 +267,13 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                   ? PageView.builder(
                       itemCount: (widget.listingData['images'] as List).length,
                       itemBuilder: (context, index) {
-                        return Image.network(
+                        return _buildImageFromUrl(
                           (widget.listingData['images'] as List)[index],
                           fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: Colors.grey.shade300,
-                              child: const Icon(Icons.fastfood, size: 80),
-                            );
-                          },
+                          fallback: Container(
+                            color: Colors.grey.shade300,
+                            child: const Icon(Icons.fastfood, size: 80),
+                          ),
                         );
                       },
                     )

@@ -244,7 +244,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
               builder: (context, constraints) {
                 final width = constraints.maxWidth;
                 final cross = width >= 1000 ? 4 : (width >= 700 ? 3 : 2);
-                final aspect = width >= 700 ? 0.9 : 0.8;
+               final aspect = width >= 700 ? 0.9 : 0.6;
                 return GridView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -622,10 +622,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
             offset: Offset(0, 5 * _bounceAnimation.value * (delay % 2 == 0 ? 1 : -1)),
             child: Opacity(
               opacity: opacity * _bounceAnimation.value,
-              child: Icon(
-                icon,
-                size: 80 + (delay * 5),
-                color: color,
+              child: IgnorePointer(
+                ignoring: true,
+                child: Icon(
+                  icon,
+                  size: 80 + (delay * 5),
+                  color: color,
+                ),
               ),
             ),
           );
@@ -695,24 +698,26 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                     // Enhanced image with discount badge
                     Stack(
                       children: [
-                        Container(
-                          height: 120,
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade300,
-                            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                            child: Image.network(
-                              listing['image'],
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  color: Colors.grey.shade300,
-                                  child: Icon(Icons.fastfood, size: 40, color: Colors.grey.shade600),
-                                );
-                              },
+                        AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: Container(
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                              child: Image.network(
+                                listing['image'],
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    color: Colors.grey.shade300,
+                                    child: Icon(Icons.fastfood, size: 40, color: Colors.grey.shade600),
+                                  );
+                                },
+                              ),
                             ),
                           ),
                         ),
@@ -758,9 +763,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                         ),
                       ],
                     ),
-                    Expanded(
+                    Flexible(
+                      fit: FlexFit.tight,
                       child: Padding(
-                        padding: const EdgeInsets.all(12.0),
+                        padding: const EdgeInsets.all(10.0),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -774,7 +780,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             Row(
                               children: [
                                 Text(
@@ -797,58 +803,64 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                                     style: TextStyle(
                                       color: Colors.green.shade700,
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 14,
+                                      fontSize: 13,
                                     ),
                                   ),
                                 ),
                               ],
                             ),
-                            const Spacer(),
+                            const SizedBox(height: 6),
                             // Enhanced action buttons
                             Row(
                               children: [
                                 Expanded(
-                                  child: ElevatedButton(
-                                    onPressed: () => _handleAddToCart(context, listing),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.orange.shade400,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(vertical: 8),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
+                                  child: SizedBox(
+                                    height: 32,
+                                    child: ElevatedButton(
+                                      onPressed: () => _handleAddToCart(context, listing),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.orange.shade400,
+                                        foregroundColor: Colors.white,
+                                        padding: EdgeInsets.zero,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        elevation: 2,
                                       ),
-                                      elevation: 2,
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.add_shopping_cart, size: 14),
-                                        const SizedBox(width: 4),
-                                        Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                                      ],
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.add_shopping_cart, size: 14),
+                                          const SizedBox(width: 4),
+                                          Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
                                 const SizedBox(width: 6),
                                 Expanded(
-                                  child: ElevatedButton(
-                                    onPressed: () => _handleBuyNow(context, listing),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green.shade600,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(vertical: 8),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
+                                  child: SizedBox(
+                                    height: 32,
+                                    child: ElevatedButton(
+                                      onPressed: () => _handleBuyNow(context, listing),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.green.shade600,
+                                        foregroundColor: Colors.white,
+                                        padding: EdgeInsets.zero,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        elevation: 2,
                                       ),
-                                      elevation: 2,
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.shopping_bag, size: 14),
-                                        const SizedBox(width: 4),
-                                        Text('Buy', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                                      ],
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.shopping_bag, size: 14),
+                                          const SizedBox(width: 4),
+                                          Text('Buy', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
