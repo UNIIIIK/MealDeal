@@ -47,6 +47,20 @@ class AuthService extends ChangeNotifier {
     _userData = null;
   }
 
+  String? _normalizeRole(String? role) {
+    if (role == null) return null;
+    switch (role.toLowerCase()) {
+      case 'food_provider':
+      case 'provider':
+        return 'food_provider';
+      case 'food_consumer':
+      case 'consumer':
+        return 'food_consumer';
+      default:
+        return role.toLowerCase();
+    }
+  }
+
   Future<void> _safeReload(User user) async {
     try {
       await user.reload();
@@ -62,7 +76,7 @@ class AuthService extends ChangeNotifier {
       if (!doc.exists) return;
 
       _userData = doc.data() ?? {};
-      _userRole = _userData?['role'];
+      _userRole = _normalizeRole(_userData?['role'] as String?);
 
       // Update Firestore verified flag *only if needed*
       if (currentUser?.emailVerified == true &&
@@ -272,7 +286,25 @@ class AuthService extends ChangeNotifier {
   // ROLE CHECKER
   // --------------------------
   bool hasRole(String role) {
-    return _userRole == role;
+    final normalizedTarget = _normalizeRole(role);
+    if (normalizedTarget == null) return false;
+
+    final currentRole = _userRole ?? _normalizeRole(_userData?['role'] as String?);
+    if (currentRole == normalizedTarget) return true;
+
+    final rolesField = _userData?['roles'];
+    if (rolesField is List) {
+      for (final entry in rolesField) {
+        final normalizedEntry = entry is String
+            ? _normalizeRole(entry)
+            : _normalizeRole(entry?.toString());
+        if (normalizedEntry == normalizedTarget) {
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
 
   // --------------------------

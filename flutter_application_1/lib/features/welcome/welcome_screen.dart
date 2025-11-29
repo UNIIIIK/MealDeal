@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:convert';
+import 'dart:ui';
 import '../auth/auth_service.dart';
 import '../auth/login_screen.dart';
 import '../auth/consumer_register_screen.dart';
@@ -109,6 +111,43 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
     super.dispose();
   }
 
+  bool _isDataUrl(String? value) {
+    if (value == null) return false;
+    return value.startsWith('data:image/');
+  }
+
+  Widget _buildImageFromUrl(String? url, {BoxFit fit = BoxFit.cover}) {
+    if (url == null || url.isEmpty) {
+      return Container(
+        color: Colors.grey.shade300,
+        child: Icon(Icons.fastfood, size: 40, color: Colors.grey.shade600),
+      );
+    }
+    if (_isDataUrl(url)) {
+      try {
+        final base64Part = url.split(',').last;
+        final bytes = base64Decode(base64Part);
+        return Image.memory(bytes, fit: fit);
+      } catch (e) {
+        debugPrint('Error decoding base64 image: $e');
+        return Container(
+          color: Colors.grey.shade300,
+          child: Icon(Icons.fastfood, size: 40, color: Colors.grey.shade600),
+        );
+      }
+    }
+    return Image.network(
+      url,
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          color: Colors.grey.shade300,
+          child: Icon(Icons.fastfood, size: 40, color: Colors.grey.shade600),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -159,30 +198,34 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                     ),
                     const SizedBox(height: 12),
                     // Bottom navigation style tabs (Home, Profile)
-                    Container(
-                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.06),
-                            blurRadius: 12,
-                            offset: const Offset(0, -4),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 16,
+                                offset: const Offset(0, -4),
+                              ),
+                            ],
+                            border: Border.all(color: Colors.white.withOpacity(0.3)),
                           ),
-                        ],
-                        border: Border(
-                          top: BorderSide(color: Colors.grey.shade200),
+                          child: TabBar(
+                            labelColor: Colors.orange.shade600,
+                            unselectedLabelColor: Colors.white.withOpacity(0.8),
+                            indicatorColor: Colors.transparent,
+                            labelPadding: const EdgeInsets.symmetric(vertical: 6),
+                            tabs: const [
+                              Tab(icon: Icon(Icons.home_outlined, size: 28), text: 'Home'),
+                              Tab(icon: Icon(Icons.person_outline, size: 28), text: 'Profile'),
+                            ],
+                          ),
                         ),
-                      ),
-                      child: TabBar(
-                        labelColor: Colors.orange.shade600,
-                        unselectedLabelColor: Colors.grey.shade600,
-                        indicatorColor: Colors.transparent,
-                        labelPadding: const EdgeInsets.symmetric(vertical: 6),
-                        tabs: const [
-                          Tab(icon: Icon(Icons.home_outlined, size: 28), text: 'Home'),
-                          Tab(icon: Icon(Icons.person_outline, size: 28), text: 'Profile'),
-                        ],
                       ),
                     ),
                   ],
@@ -708,16 +751,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                             ),
                             child: ClipRRect(
                               borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                              child: Image.network(
-                                listing['image'],
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Container(
-                                    color: Colors.grey.shade300,
-                                    child: Icon(Icons.fastfood, size: 40, color: Colors.grey.shade600),
-                                  );
-                                },
-                              ),
+                              child: _buildImageFromUrl(listing['image']),
                             ),
                           ),
                         ),

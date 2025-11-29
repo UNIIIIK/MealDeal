@@ -185,6 +185,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         children: [
           // Search and Info Panel
           Container(
+            constraints: const BoxConstraints(maxHeight: 300),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -196,9 +197,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 ),
               ],
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 // Search Bar
                 TextField(
                   controller: _searchController,
@@ -348,6 +350,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 ],
               ],
             ),
+          ),
           ),
 
           // Map

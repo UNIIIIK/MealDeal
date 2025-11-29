@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'dart:convert';
 import '../../services/messaging_service.dart';
 import '../../models/message.dart';
 import '../../features/auth/auth_service.dart';
@@ -90,6 +91,21 @@ class _ConversationTileState extends State<_ConversationTile> {
   ChatUser? otherUser;
   bool loading = true;
 
+  ImageProvider? _buildImageProvider(String? url) {
+    if (url == null || url.isEmpty) return null;
+    if (url.startsWith('data:image/')) {
+      try {
+        final base64Part = url.split(',').last;
+        final bytes = base64Decode(base64Part);
+        return MemoryImage(bytes);
+      } catch (e) {
+        debugPrint('Error decoding base64 image: $e');
+        return null;
+      }
+    }
+    return NetworkImage(url);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -135,7 +151,7 @@ class _ConversationTileState extends State<_ConversationTile> {
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))]),
       child: ListTile(
         contentPadding: const EdgeInsets.all(12),
-        leading: CircleAvatar(radius: 28, backgroundColor: Colors.green.shade100, backgroundImage: displayImage != null ? NetworkImage(displayImage) : null, child: displayImage == null ? Text(displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green.shade800)) : null),
+        leading: CircleAvatar(radius: 28, backgroundColor: Colors.green.shade100, backgroundImage: _buildImageProvider(displayImage), child: displayImage == null ? Text(displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green.shade800)) : null),
         title: Row(children: [Expanded(child: Text(displayName, style: TextStyle(fontWeight: isUnread ? FontWeight.bold : FontWeight.w600, fontSize: 16, color: isUnread ? Colors.black87 : Colors.black54))), if (conv.listingId != null) Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(12)), child: Text('FOOD', style: TextStyle(color: Colors.orange.shade700, fontSize: 10, fontWeight: FontWeight.bold)))],),
         subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const SizedBox(height: 6), Text(conv.lastMessageContent, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: isUnread ? Colors.black87 : Colors.grey.shade600, fontSize: 14)), const SizedBox(height: 6), Row(children: [Text(_formatTimestamp(conv.lastMessageTime)), const SizedBox(width: 8), Text(roleLabel, style: TextStyle(color: otherUser?.role == 'food_provider' ? Colors.blue.shade600 : Colors.green.shade600, fontSize: 12, fontWeight: FontWeight.w600))])]),
         trailing: isUnread ? Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.green.shade600, shape: BoxShape.circle), child: Text(conv.unreadCount > 99 ? '99+' : '${conv.unreadCount}', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))) : null,

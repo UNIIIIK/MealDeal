@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'dart:convert';
 
 import 'firebase_options.dart';
 import 'theme/app_theme.dart';
@@ -22,6 +23,8 @@ import 'features/consumer/my_orders_screen.dart';
 import 'features/provider/orders_management_screen.dart';
 import 'features/messaging/chat_list_screen.dart';
 
+// ⚠️ IMPORTANT: Changes to this function require HOT RESTART (R), not hot reload (r)
+// Press 'R' in terminal or use the restart button in your IDE
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -72,7 +75,6 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _selectedIndex = 0;
   String? _lastRole;
-  bool _isUpdatingRole = false;
 
   @override
   Widget build(BuildContext context) {
@@ -102,38 +104,31 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     List<BottomNavigationBarItem> items;
 
     if (role == 'provider') {
-      screens = const [
-        FeedScreen(),
-        OrdersManagementScreen(),
-        ChatListScreen(),
-        AnalyticsScreen(),
-        ProfileScreen(),
+      screens = [
+        const FeedScreen(),
+        const OrdersManagementScreen(),
+        const ChatListScreen(),
       ];
       items = const [
         BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
         BottomNavigationBarItem(icon: Icon(Icons.shopping_cart), label: 'Orders'),
         BottomNavigationBarItem(icon: Icon(Icons.message), label: 'Messages'),
-        BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Analytics'),
-        BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
       ];
     } else {
-      screens = const [
-        FeedScreen(),
-        ChatListScreen(),
-        ProfileScreen(),
+      screens = [
+        const FeedScreen(),
+        const ChatListScreen(),
       ];
       items = const [
         BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
         BottomNavigationBarItem(icon: Icon(Icons.message), label: 'Messages'),
-        BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
       ];
     }
 
     // Reset index when role changes or index is out of bounds
     // Capture role value to avoid closure issues
     final currentRole = role;
-    if ((_lastRole != currentRole || _selectedIndex >= items.length) && !_isUpdatingRole) {
-      _isUpdatingRole = true;
+    if (_lastRole != currentRole || _selectedIndex >= items.length) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           setState(() {
@@ -143,10 +138,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             if (_selectedIndex >= items.length) {
               _selectedIndex = 0;
             }
-            _isUpdatingRole = false;
           });
-        } else {
-          _isUpdatingRole = false;
         }
       });
     }
@@ -154,13 +146,39 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     final index = _selectedIndex >= items.length ? 0 : _selectedIndex;
 
     return Scaffold(
-      body: IndexedStack(index: index, children: screens),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: index,
-        selectedItemColor: Colors.green.shade700,
-        unselectedItemColor: Colors.grey.shade600,
-        items: items,
-        onTap: (i) => setState(() => _selectedIndex = i),
+      body: IndexedStack(
+        index: index,
+        children: screens,
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: index,
+          selectedItemColor: Colors.green.shade700,
+          unselectedItemColor: Colors.grey.shade600,
+          type: BottomNavigationBarType.fixed,
+          elevation: 8,
+          backgroundColor: Colors.white,
+          selectedFontSize: 12,
+          unselectedFontSize: 11,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
+          items: items,
+          onTap: (i) {
+            if (mounted && i < items.length && i >= 0) {
+              setState(() {
+                _selectedIndex = i;
+              });
+            }
+          },
+        ),
       ),
     );
   }
@@ -176,6 +194,12 @@ class ProfileScreen extends StatelessWidget {
     final isConsumer = auth.hasRole('food_consumer');
 
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Profile'),
+        backgroundColor: Colors.green.shade700,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -201,6 +225,8 @@ class ProfileScreen extends StatelessWidget {
       ),
     );
   }
+
+  // Drawer moved to FeedScreen
 
   Widget _buildUserCard(
       BuildContext context, AuthService auth, dynamic userData) {
@@ -591,6 +617,18 @@ class ProfileScreen extends StatelessWidget {
         ),
         if (auth.hasRole('food_provider'))
           ListTile(
+            leading: const Icon(Icons.bar_chart, color: Colors.blue),
+            title: const Text('Analytics'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AnalyticsScreen()),
+              );
+            },
+          ),
+        if (auth.hasRole('food_provider'))
+          ListTile(
             leading: const Icon(Icons.location_on),
             title: const Text('Manage Business Location'),
             trailing: const Icon(Icons.chevron_right),
@@ -714,9 +752,35 @@ class ProfileScreen extends StatelessWidget {
       child: url != null
           ? ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.network(url, fit: BoxFit.cover),
+              child: _buildImageFromUrl(url),
             )
           : Icon(Icons.fastfood, color: Colors.orange.shade600),
+    );
+  }
+
+  bool _isDataUrl(String? value) {
+    if (value == null) return false;
+    return value.startsWith('data:image/');
+  }
+
+  Widget _buildImageFromUrl(String? url, {BoxFit fit = BoxFit.cover}) {
+    if (url == null || url.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    if (_isDataUrl(url)) {
+      try {
+        final base64Part = url.split(',').last;
+        final bytes = base64Decode(base64Part);
+        return Image.memory(bytes, fit: fit);
+      } catch (e) {
+        debugPrint('Error decoding base64 image: $e');
+        return Icon(Icons.broken_image, color: Colors.grey.shade400);
+      }
+    }
+    return Image.network(
+      url,
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, color: Colors.grey.shade400),
     );
   }
 }

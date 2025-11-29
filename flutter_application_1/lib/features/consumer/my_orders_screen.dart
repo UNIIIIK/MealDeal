@@ -101,7 +101,15 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                           children: [
                             Icon(Icons.error, color: Colors.red, size: 48),
                             const SizedBox(height: 16),
-                            Text('Error loading orders: ${snapshot.error}'),
+                            Text(
+                              'Error loading orders: ${snapshot.error}',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.black87,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
                           ],
                         ),
                       );
@@ -112,11 +120,24 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.shopping_bag_outlined, size: 48, color: Colors.grey),
+                            Icon(Icons.shopping_bag_outlined, size: 48, color: Colors.grey.shade600),
                             const SizedBox(height: 16),
-                            Text('No orders found'),
+                            Text(
+                              'No orders found',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade800,
+                              ),
+                            ),
                             const SizedBox(height: 8),
-                            Text('Your orders will appear here'),
+                            Text(
+                              'Your orders will appear here',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
                           ],
                         ),
                       );
@@ -158,16 +179,31 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
   }
 
   Widget _buildFilterChip(String value, String label) {
+    final isSelected = _selectedFilter == value;
     return FilterChip(
-      label: Text(label),
-      selected: _selectedFilter == value,
+      label: Text(
+        label,
+        style: TextStyle(
+          color: isSelected ? Colors.green.shade800 : Colors.black87,
+          fontSize: 14,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+        ),
+      ),
+      selected: isSelected,
       onSelected: (selected) {
         setState(() {
           _selectedFilter = value;
         });
       },
       selectedColor: Colors.green.shade100,
+      backgroundColor: Colors.grey.shade200,
       checkmarkColor: Colors.green.shade700,
+      side: BorderSide(
+        color: isSelected ? Colors.green.shade400 : Colors.grey.shade400,
+        width: 1.5,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      elevation: isSelected ? 2 : 0,
     );
   }
 
@@ -197,8 +233,9 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                 Text(
                   'Order #${orderId.substring(0, 8)}',
                   style: const TextStyle(
-                    fontSize: 16,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
+                    color: Colors.black87,
                   ),
                 ),
                 _buildStatusChip(status),
@@ -240,13 +277,19 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                       children: [
                         Text(
                           item['title'] ?? 'Unknown Item',
-                          style: const TextStyle(fontWeight: FontWeight.w500),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                            color: Colors.black87,
+                          ),
                         ),
+                        const SizedBox(height: 2),
                         Text(
                           'Qty: ${item['quantity']} × ₱${(item['price'] ?? 0).toStringAsFixed(0)}',
                           style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 12,
+                            color: Colors.grey.shade700,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
@@ -261,37 +304,50 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
             // Order details
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Total: ₱${totalPrice.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Total: ₱${totalPrice.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _getOrderDateText(createdAt, checkoutDate, claimedAt),
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 12,
+                      const SizedBox(height: 4),
+                      Text(
+                        _getOrderDateText(createdAt, checkoutDate, claimedAt),
+                        style: TextStyle(
+                          color: Colors.grey.shade800,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 
                 // Right-side actions
                 if (status == 'checked_out' || status == 'claimed')
-                  _buildRatingSection(orderId, data),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: _buildRatingSection(orderId, data),
+                  ),
                 if (awaitingPickup)
-                  TextButton.icon(
-                    onPressed: () => _openPickupRoute(orderId, data),
-                    icon: const Icon(Icons.route, size: 16),
-                    label: const Text('View Pickup Route'),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: TextButton.icon(
+                      onPressed: () => _openPickupRoute(orderId, data),
+                      icon: const Icon(Icons.route, size: 18),
+                      label: const Text('Route', style: TextStyle(fontSize: 13)),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -348,8 +404,8 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         label,
         style: TextStyle(
           color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -361,21 +417,23 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     
     if (hasRated) {
       return Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           ...List.generate(5, (index) => Icon(
             index < rating ? Icons.star : Icons.star_border,
             color: Colors.amber,
-            size: 16,
+            size: 18,
           )),
         ],
       );
     } else {
       return TextButton.icon(
         onPressed: () => _showRatingDialog(orderId),
-        icon: const Icon(Icons.star_border, size: 16),
-        label: const Text('Rate'),
+        icon: const Icon(Icons.star_border, size: 18),
+        label: const Text('Rate', style: TextStyle(fontSize: 13)),
         style: TextButton.styleFrom(
           foregroundColor: Colors.amber.shade700,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         ),
       );
     }

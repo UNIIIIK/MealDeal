@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import 'package:latlong2/latlong.dart' as ll;
 import '../../theme/app_theme.dart';
 import '../../widgets/animated_food_button.dart';
 import '../../widgets/food_loading_widget.dart';
@@ -11,6 +12,12 @@ import '../../widgets/food_decorative_divider.dart';
 import '../auth/auth_service.dart';
 import '../provider/create_listing_screen.dart';
 import '../provider/notifications_screen.dart';
+import '../provider/analytics_screen.dart';
+import '../provider/location_management_screen.dart';
+import '../provider/location_picker_screen.dart';
+import '../messaging/chat_list_screen.dart';
+import '../consumer/edit_profile_screen.dart';
+import '../consumer/my_orders_screen.dart';
 import 'listing_detail_screen.dart';
 import 'cart_screen.dart';
 import 'checkout_screen.dart';
@@ -98,10 +105,28 @@ class _FeedScreenState extends State<FeedScreen> {
   PreferredSizeWidget _buildAppBar(AuthService authService) {
     if (authService.hasRole('food_provider')) {
       return AppBar(
-        backgroundColor: AppTheme.primaryOrange,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                AppTheme.primaryOrange,
+                Colors.orange.shade600,
+                AppTheme.primaryOrange,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         elevation: 0,
         title: const Text(''),
         centerTitle: true,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu, color: Colors.white, size: 28),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
         actions: [
           Consumer<AuthService>(
             builder: (context, authService, child) {
@@ -122,14 +147,22 @@ class _FeedScreenState extends State<FeedScreen> {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withOpacity(0.25),
                             borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                           ),
                           child: IconButton(
                             icon: Icon(
                               Icons.notifications_outlined, 
-                              color: unread > 0 ? AppTheme.accentYellow : Colors.white,
-                              size: 24,
+                              color: unread > 0 ? Colors.yellow.shade300 : Colors.white,
+                              size: 26,
                             ),
                             onPressed: () async {
                               if (context.mounted) {
@@ -176,10 +209,31 @@ class _FeedScreenState extends State<FeedScreen> {
       );
     } else {
       return AppBar(
-        backgroundColor: AppTheme.primaryOrange,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                AppTheme.primaryOrange,
+                Colors.orange.shade600,
+                AppTheme.primaryOrange,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(20),
+            ),
+          ),
+        ),
         elevation: 0,
         title: const Text(''),
         centerTitle: true,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu, color: Colors.white, size: 28),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(
             bottom: Radius.circular(20),
@@ -226,6 +280,7 @@ class _FeedScreenState extends State<FeedScreen> {
   Widget build(BuildContext context) {
     final authServiceTop = Provider.of<AuthService>(context);
     return Scaffold(
+      drawer: _buildDrawer(context, authServiceTop),
       floatingActionButton: Consumer<AuthService>(
         builder: (context, authService, child) {
           if (authService.hasRole('food_provider')) {
@@ -1357,5 +1412,266 @@ class _FeedScreenState extends State<FeedScreen> {
     } catch (e) {
       debugPrint('Failed to create pending order notification: $e');
     }
+  }
+
+  Future<void> _openConsumerLocationManager(BuildContext context, AuthService auth) async {
+    final userData = auth.userData;
+    Map<String, dynamic>? locationData;
+    if (userData != null) {
+      locationData = (userData['saved_location'] ?? userData['location']) as Map<String, dynamic>?;
+    }
+
+    ll.LatLng? initialLocation;
+    String? initialAddress;
+    if (locationData != null) {
+      final lat = locationData['lat'];
+      final lng = locationData['lng'];
+      if (lat != null && lng != null) {
+        initialLocation = ll.LatLng((lat as num).toDouble(), (lng as num).toDouble());
+      }
+      initialAddress = locationData['address'] ?? userData?['address'];
+    }
+
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (_) => LocationPickerScreen(
+          initialLocation: initialLocation,
+          initialAddress: initialAddress,
+        ),
+      ),
+    );
+
+    if (result == null) return;
+    final pickedLocation = result['location'] as ll.LatLng?;
+    final pickedAddress = result['address'] as String?;
+    if (pickedLocation == null || auth.currentUser == null) return;
+
+    await FirebaseFirestore.instance.collection('users').doc(auth.currentUser!.uid).update({
+      'saved_location': {
+        'lat': pickedLocation.latitude,
+        'lng': pickedLocation.longitude,
+        'address': pickedAddress ?? initialAddress ?? 'Saved location',
+      },
+      'last_updated': FieldValue.serverTimestamp(),
+    });
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Saved location updated'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  Widget _buildDrawer(BuildContext context, AuthService auth) {
+    final userData = auth.userData;
+    return Drawer(
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          DrawerHeader(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppTheme.primaryOrange,
+                  AppTheme.primaryOrange.withOpacity(0.8),
+                  Colors.orange.shade400,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                CircleAvatar(
+                  radius: 32,
+                  backgroundColor: Colors.white,
+                  child: Text(
+                    (userData?['name'] ?? 'U')[0].toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 36,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.primaryOrange,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  userData?['name'] ?? 'User',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black26,
+                        blurRadius: 4,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  userData?['email'] ?? '',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.95),
+                    fontSize: 14,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black26,
+                        blurRadius: 2,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.purple.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.person_outline, color: Colors.deepPurple, size: 24),
+            ),
+            title: const Text('Profile', style: TextStyle(fontWeight: FontWeight.w500)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+              );
+            },
+          ),
+          ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.location_on, color: Colors.orange, size: 24),
+            ),
+            title: Text(
+              auth.hasRole('food_provider') ? 'Manage Location' : 'Saved Location',
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.pop(context);
+              if (auth.hasRole('food_provider')) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LocationManagementScreen()),
+                );
+              } else {
+                _openConsumerLocationManager(context, auth);
+              }
+            },
+          ),
+          if (auth.hasRole('food_provider'))
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.bar_chart, color: Colors.blue, size: 24),
+              ),
+              title: const Text('Analytics', style: TextStyle(fontWeight: FontWeight.w500)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AnalyticsScreen()),
+                );
+              },
+            ),
+          if (!auth.hasRole('food_provider'))
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blueGrey.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.receipt_long, color: Colors.blueGrey, size: 24),
+              ),
+              title: const Text('My Orders', style: TextStyle(fontWeight: FontWeight.w500)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MyOrdersScreen()),
+                );
+              },
+            ),
+          if (!auth.hasRole('food_provider'))
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.message, color: Colors.green, size: 24),
+              ),
+              title: const Text('Messages', style: TextStyle(fontWeight: FontWeight.w500)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ChatListScreen()),
+                );
+              },
+            ),
+          ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.help, color: Colors.grey, size: 24),
+            ),
+            title: const Text('Help & Support', style: TextStyle(fontWeight: FontWeight.w500)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.pop(context);
+              // Add help screen navigation if needed
+            },
+          ),
+          const Divider(height: 32),
+          ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.logout, color: Colors.red, size: 24),
+            ),
+            title: const Text('Logout', style: TextStyle(fontWeight: FontWeight.w500, color: Colors.red)),
+            trailing: const Icon(Icons.chevron_right, color: Colors.red),
+            onTap: () {
+              Navigator.pop(context);
+              auth.signOut();
+            },
+          ),
+        ],
+      ),
+    );
   }
 }

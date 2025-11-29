@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'dart:convert';
 import '../../services/messaging_service.dart';
 import '../../models/message.dart';
 import '../../features/auth/auth_service.dart';
@@ -27,6 +28,21 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _isTyping = false;
+
+  ImageProvider? _buildImageProvider(String? url) {
+    if (url == null || url.isEmpty) return null;
+    if (url.startsWith('data:image/')) {
+      try {
+        final base64Part = url.split(',').last;
+        final bytes = base64Decode(base64Part);
+        return MemoryImage(bytes);
+      } catch (e) {
+        debugPrint('Error decoding base64 image: $e');
+        return null;
+      }
+    }
+    return NetworkImage(url);
+  }
 
   // Local state for pagination
   bool _isLoadingMore = false;
@@ -137,7 +153,7 @@ class _ChatScreenState extends State<ChatScreen> {
             CircleAvatar(
               radius: 18,
               backgroundColor: Colors.white,
-              backgroundImage: widget.otherUser.profileImageUrl != null ? NetworkImage(widget.otherUser.profileImageUrl!) : null,
+              backgroundImage: _buildImageProvider(widget.otherUser.profileImageUrl),
               child: widget.otherUser.profileImageUrl == null ? Text(widget.otherUser.name.isNotEmpty ? widget.otherUser.name[0].toUpperCase() : 'U', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green.shade800)) : null,
             ),
             const SizedBox(width: 12),
@@ -240,7 +256,7 @@ class _ChatScreenState extends State<ChatScreen> {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isCurrentUser) ...[
-            CircleAvatar(radius: 16, backgroundColor: Colors.green.shade100, backgroundImage: widget.otherUser.profileImageUrl != null ? NetworkImage(widget.otherUser.profileImageUrl!) : null, child: widget.otherUser.profileImageUrl == null ? Text(widget.otherUser.name.isNotEmpty ? widget.otherUser.name[0].toUpperCase() : 'U', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green.shade800)) : null),
+            CircleAvatar(radius: 16, backgroundColor: Colors.green.shade100, backgroundImage: _buildImageProvider(widget.otherUser.profileImageUrl), child: widget.otherUser.profileImageUrl == null ? Text(widget.otherUser.name.isNotEmpty ? widget.otherUser.name[0].toUpperCase() : 'U', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green.shade800)) : null),
             const SizedBox(width: 8),
           ],
           Flexible(

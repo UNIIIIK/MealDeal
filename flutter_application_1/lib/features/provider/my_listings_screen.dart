@@ -1,6 +1,7 @@
 // My Listings Screen for Providers
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert';
 import '../auth/auth_service.dart';
 import 'package:provider/provider.dart';
 import 'location_management_screen.dart';
@@ -86,6 +87,32 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
     }
   }
 
+  bool _isDataUrl(String? value) {
+    if (value == null) return false;
+    return value.startsWith('data:image/');
+  }
+
+  Widget _buildImageFromUrl(String? url, {BoxFit fit = BoxFit.cover}) {
+    if (url == null || url.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    if (_isDataUrl(url)) {
+      try {
+        final base64Part = url.split(',').last;
+        final bytes = base64Decode(base64Part);
+        return Image.memory(bytes, fit: fit);
+      } catch (e) {
+        debugPrint('Error decoding base64 image: $e');
+        return const Icon(Icons.broken_image, color: Colors.grey);
+      }
+    }
+    return Image.network(
+      url,
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.grey),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthService>(context, listen: false);
@@ -168,7 +195,7 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
                       height: 90,
                       color: Colors.grey.shade200,
                       child: image != null
-                          ? Image.network(image, fit: BoxFit.cover)
+                          ? _buildImageFromUrl(image)
                           : const Icon(Icons.image, color: Colors.grey),
                     ),
                     const SizedBox(width: 12),

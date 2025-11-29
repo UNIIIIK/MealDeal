@@ -13,6 +13,88 @@ class AnalyticsScreen extends StatefulWidget {
 
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
   String _period = 'daily'; // daily, monthly, yearly
+  Map<String, String>? _listingProviderCache; // Cache listing_id -> provider_id
+
+  Future<Map<String, Map<String, dynamic>>> _processAnalyticsData(
+      QuerySnapshot<Map<String, dynamic>> snapshot, String providerId) async {
+    final dayToSaved = <String, double>{};
+    final dayToOrders = <String, int>{};
+    
+    // Build cache of listing_id -> provider_id
+    if (_listingProviderCache == null) {
+      _listingProviderCache = {};
+      final allListingIds = <String>{};
+      
+      for (final cartDoc in snapshot.docs) {
+        final items = cartDoc.data()['items'] as List<dynamic>? ?? [];
+        for (final item in items) {
+          if (item is Map<String, dynamic>) {
+            final listingId = item['listing_id'] as String?;
+            if (listingId != null) {
+              allListingIds.add(listingId);
+            }
+          }
+        }
+      }
+      
+      // Batch fetch listings
+      for (final listingId in allListingIds) {
+        try {
+          final listingDoc = await FirebaseFirestore.instance
+              .collection('listings')
+              .doc(listingId)
+              .get();
+          if (listingDoc.exists) {
+            final itemProviderId = listingDoc.data()?['provider_id'] as String?;
+            if (itemProviderId != null) {
+              _listingProviderCache![listingId] = itemProviderId;
+            }
+          }
+        } catch (e) {
+          debugPrint('Error fetching listing $listingId: $e');
+        }
+      }
+    }
+    
+    // Process carts
+    final allCarts = snapshot.docs.toList()
+      ..sort((a, b) {
+        final aDate = a.data()['checkout_date'] as Timestamp?;
+        final bDate = b.data()['checkout_date'] as Timestamp?;
+        if (aDate == null && bDate == null) return 0;
+        if (aDate == null) return 1;
+        if (bDate == null) return -1;
+        return bDate.compareTo(aDate);
+      });
+    
+    for (final cartDoc in allCarts) {
+      final cartData = cartDoc.data();
+      final items = cartData['items'] as List<dynamic>? ?? [];
+      final ts = cartData['checkout_date'] as Timestamp?;
+      
+      if (ts == null) continue;
+      
+      for (final item in items) {
+        if (item is Map<String, dynamic>) {
+          final listingId = item['listing_id'] as String?;
+          if (listingId != null) {
+            final itemProviderId = _listingProviderCache?[listingId];
+            if (itemProviderId == providerId) {
+              final day = DateTime(ts.toDate().year, ts.toDate().month, ts.toDate().day).toIso8601String();
+              final saved = (item['price'] ?? 0).toDouble() * (item['quantity'] ?? 1);
+              dayToSaved[day] = (dayToSaved[day] ?? 0) + saved;
+              dayToOrders[day] = (dayToOrders[day] ?? 0) + 1;
+            }
+          }
+        }
+      }
+    }
+    
+    return {
+      'dayToSaved': dayToSaved,
+      'dayToOrders': dayToOrders,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,56 +107,89 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         }
 
         // Query checked out cart items for this provider's listings
+        // Note: Using only status filter to avoid index requirement
+        // Will filter by provider_id client-side
     final query = FirebaseFirestore.instance
             .collection('cart')
             .where('status', whereIn: ['awaiting_pickup','claimed','checked_out'])
-            .orderBy('checkout_date', descending: true)
-            .limit(100);
+            .limit(200); // Increased limit to account for client-side filtering
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Analytics'),
       ),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: query.snapshots(),
+      body: FutureBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        future: query.get(),
         builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
+                  const SizedBox(height: 16),
+                  Text('Error loading analytics: ${snapshot.error}'),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _listingProviderCache = null; // Reset cache
+                      });
+                    },
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.analytics_outlined, size: 64, color: Colors.grey.shade400),
+                  const SizedBox(height: 16),
+                  Text('No checked out orders yet', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey.shade600)),
+                  const SizedBox(height: 8),
+                  Text('Analytics will appear here once customers checkout', style: TextStyle(color: Colors.grey.shade500, fontSize: 14), textAlign: TextAlign.center),
+                ],
+              ),
+            );
+          }
+
+          return FutureBuilder<Map<String, Map<String, dynamic>>>(
+            future: _processAnalyticsData(snapshot.data!, providerId),
+            builder: (context, dataSnapshot) {
+              if (dataSnapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              if (snapshot.hasError) {
-                return Center(
-                  child: Text('Error: ${snapshot.error}'),
-                );
+              if (!dataSnapshot.hasData) {
+                return const Center(child: Text('No data available'));
               }
 
-          final Map<String, double> dayToSaved = {};
-              final Map<String, int> dayToOrders = {};
-              
-          if (snapshot.hasData) {
-                for (final cartDoc in snapshot.data!.docs) {
-                  final cartData = cartDoc.data();
-                  final items = cartData['items'] as List<dynamic>? ?? [];
-                  
-                  // Filter items that belong to this provider
-                  for (final item in items) {
-                    if (item is Map<String, dynamic>) {
-                      final listingId = item['listing_id'] as String?;
-                      if (listingId != null) {
-                        // For now, we'll process all items and assume they belong to this provider
-                        // In a production app, you'd want to verify the provider_id
-                         final ts = cartData['checkout_date'] as Timestamp?;
-                        if (ts != null) {
-              final day = DateTime(ts.toDate().year, ts.toDate().month, ts.toDate().day).toIso8601String();
-                          final saved = (item['price'] ?? 0).toDouble() * (item['quantity'] ?? 1);
-              dayToSaved[day] = (dayToSaved[day] ?? 0) + saved;
-                          dayToOrders[day] = (dayToOrders[day] ?? 0) + 1;
-                        }
-                      }
-                    }
-                  }
-            }
-          }
+              final dayToSaved = dataSnapshot.data!['dayToSaved'] as Map<String, double>;
+              final dayToOrders = dataSnapshot.data!['dayToOrders'] as Map<String, int>;
+
+              if (dayToSaved.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.analytics_outlined, size: 64, color: Colors.grey.shade400),
+                      const SizedBox(height: 16),
+                      Text('No checked out orders yet', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey.shade600)),
+                      const SizedBox(height: 8),
+                      Text('Analytics will appear here once customers checkout', style: TextStyle(color: Colors.grey.shade500, fontSize: 14), textAlign: TextAlign.center),
+                    ],
+                  ),
+                );
+              }
 
           if (dayToSaved.isEmpty) {
                 return Center(
@@ -382,9 +497,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               ],
             ),
           );
+            },
+          );
         },
       ),
-        );
+    );
       },
     );
   }

@@ -2,10 +2,39 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'dart:convert';
 import '../auth/auth_service.dart';
 
 class MyClaimsScreen extends StatelessWidget {
   const MyClaimsScreen({super.key});
+
+  static bool _isDataUrl(String? value) {
+    if (value == null) return false;
+    return value.startsWith('data:image/');
+  }
+
+  static Widget _buildImageFromUrl(String? url, {BoxFit fit = BoxFit.cover}) {
+    if (url == null || url.isEmpty) {
+      return const Icon(Icons.fastfood, size: 24, color: Colors.grey);
+    }
+    if (_isDataUrl(url)) {
+      try {
+        final base64Part = url.split(',').last;
+        final bytes = base64Decode(base64Part);
+        return Image.memory(bytes, fit: fit);
+      } catch (e) {
+        debugPrint('Error decoding base64 image: $e');
+        return const Icon(Icons.fastfood, size: 24, color: Colors.grey);
+      }
+    }
+    return Image.network(
+      url,
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) {
+        return const Icon(Icons.fastfood, size: 24, color: Colors.grey);
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -253,13 +282,7 @@ class MyClaimsScreen extends StatelessWidget {
                                           child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: item['image'] != null
-                            ? Image.network(
-                                item['image'],
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return const Icon(Icons.fastfood, size: 24, color: Colors.grey);
-                                },
-                              )
+                            ? _buildImageFromUrl(item['image'])
                             : const Icon(Icons.fastfood, size: 24, color: Colors.grey),
                       ),
                   ),
