@@ -9,6 +9,7 @@ import 'firebase_options.dart';
 import 'theme/app_theme.dart';
 
 import 'features/auth/auth_service.dart';
+import 'features/auth/email_verification_screen.dart';
 import 'services/messaging_service.dart';
 import 'services/firestore_helper.dart';
 
@@ -72,9 +73,34 @@ class MainNavigationScreen extends StatefulWidget {
   State<MainNavigationScreen> createState() => _MainNavigationScreenState();
 }
 
-class _MainNavigationScreenState extends State<MainNavigationScreen> {
+class _MainNavigationScreenState extends State<MainNavigationScreen> with WidgetsBindingObserver {
   int _selectedIndex = 0;
   String? _lastRole;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // When app returns to foreground, check if email was verified
+    if (state == AppLifecycleState.resumed && mounted) {
+      final auth = Provider.of<AuthService>(context, listen: false);
+      if (auth.isLoggedIn && !auth.isEmailVerified) {
+        // Silently check verification status when app resumes
+        auth.reloadUser();
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -89,6 +115,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   Widget _buildForRole(AuthService auth) {
+    if (!auth.isEmailVerified) {
+      return const EmailVerificationScreen();
+    }
+
     final isProvider = auth.hasRole('food_provider');
     final isConsumer = auth.hasRole('food_consumer');
 
@@ -161,16 +191,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           ],
         ),
         child: BottomNavigationBar(
-          currentIndex: index,
-          selectedItemColor: Colors.green.shade700,
-          unselectedItemColor: Colors.grey.shade600,
+        currentIndex: index,
+        selectedItemColor: Colors.green.shade700,
+        unselectedItemColor: Colors.grey.shade600,
           type: BottomNavigationBarType.fixed,
           elevation: 8,
           backgroundColor: Colors.white,
           selectedFontSize: 12,
           unselectedFontSize: 11,
           selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
-          items: items,
+        items: items,
           onTap: (i) {
             if (mounted && i < items.length && i >= 0) {
               setState(() {
@@ -624,9 +654,9 @@ class ProfileScreen extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const AnalyticsScreen()),
-              );
-            },
-          ),
+            );
+          },
+        ),
         if (auth.hasRole('food_provider'))
           ListTile(
             leading: const Icon(Icons.location_on),

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:provider/provider.dart';
+
+import 'auth_service.dart';
 
 class ProviderRegisterScreen extends StatefulWidget {
   const ProviderRegisterScreen({super.key});
@@ -127,6 +128,11 @@ class _ProviderRegisterScreenState extends State<ProviderRegisterScreen> with Ti
     );
   }
 
+  String? _encodeImage(Uint8List? bytes) {
+    if (bytes == null || bytes.isEmpty) return null;
+    return base64Encode(bytes);
+  }
+
   bool _validateCurrentStep() {
     switch (_currentStep) {
       case 0: // Personal Information
@@ -189,47 +195,56 @@ class _ProviderRegisterScreenState extends State<ProviderRegisterScreen> with Ti
     try {
       final email = _emailController.text.trim();
       final password = _passwordController.text;
-      final name = '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}';
+      final name =
+          '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}';
       final phone = _phoneController.text.trim();
       final address = _addressController.text.trim();
       final businessName = _businessNameController.text.trim();
       final businessAddress = _businessAddressController.text.trim();
-      final role = 'food_provider';
 
-      // Call the API endpoint to register the user
-      final response = await http.post(
-        Uri.parse('http://localhost:8000/api_register.php'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': email,
-          'password': password,
-          'name': name,
-          'phone': phone,
-          'address': address,
+      final permitBase64 = _encodeImage(_businessPermitImageBytes);
+      final validIdBase64 = _encodeImage(_validIdImageBytes);
+
+      final extraData = <String, dynamic>{
+        'first_name': _firstNameController.text.trim(),
+        'last_name': _lastNameController.text.trim(),
           'business_name': businessName,
           'business_address': businessAddress,
-          'role': role,
-          'business_permit_image': kIsWeb ? _businessPermitImageBytes : _businessPermitImage?.path,
-          'valid_id_image': kIsWeb ? _validIdImageBytes : _validIdImage?.path,
-        }),
+        if (permitBase64 != null || validIdBase64 != null)
+          'documents': {
+            if (permitBase64 != null)
+              'business_permit_image': permitBase64,
+            if (validIdBase64 != null) 'valid_id_image': validIdBase64,
+          },
+      };
+
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final result = await authService.registerWithEmailAndPassword(
+        email: email,
+        password: password,
+        name: name,
+        phone: phone,
+        role: 'food_provider',
+        address: address,
+        extraData: extraData,
       );
 
-      final responseData = jsonDecode(response.body);
-
-      if (response.statusCode == 200 && responseData['success'] == true) {
         if (!mounted) return;
         
+      if (result['success'] == true) {
         showDialog(
           context: context,
           barrierDismissible: false,
           builder: (context) => AlertDialog(
-            title: const Text('Registration Successful'),
-            content: const Text('Your provider account has been submitted for review. You will receive an email once your account is approved.'),
+            title: const Text('Registration Submitted'),
+            content: const Text(
+              'We emailed a verification link. Verify your email before logging in to manage your provider account.',
+            ),
             actions: [
               TextButton(
                 onPressed: () {
-                  Navigator.pop(context); // Close dialog
-                  Navigator.pop(context); // Go back to welcome screen
+                  Navigator.pop(context);
+                  Navigator.pop(context);
                 },
                 child: const Text('OK'),
               ),
@@ -237,39 +252,18 @@ class _ProviderRegisterScreenState extends State<ProviderRegisterScreen> with Ti
           ),
         );
       } else {
-        throw Exception(responseData['message'] ?? 'Registration failed');
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (!mounted) return;
-      
-      String errorMessage = 'Registration failed. Please try again.';
-      
-      if (e is FirebaseAuthException) {
-        switch (e.code) {
-          case 'email-already-in-use':
-            errorMessage = 'An account already exists with this email.';
-            break;
-          case 'weak-password':
-            errorMessage = 'Please choose a stronger password.';
-            break;
-          case 'invalid-email':
-            errorMessage = 'Please enter a valid email address.';
-            break;
-          default:
-            errorMessage = e.message ?? errorMessage;
-        }
-      }
-      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(errorMessage),
+            content: Text(result['message'] ?? 'Registration failed.'),
           backgroundColor: Colors.red,
         ),
       );
     }
-
+    } finally {
+      if (mounted) {
     setState(() => _isLoading = false);
+      }
+    }
   }
 
   @override

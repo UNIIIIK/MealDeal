@@ -14,7 +14,8 @@ class WelcomeScreen extends StatefulWidget {
   State<WelcomeScreen> createState() => _WelcomeScreenState();
 }
 
-class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateMixin {
+class _WelcomeScreenState extends State<WelcomeScreen>
+    with TickerProviderStateMixin {
   late AnimationController _fadeController;
   late AnimationController _slideController;
   late AnimationController _bounceController;
@@ -27,10 +28,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
     {
       'id': '1',
       'title': 'Fresh Bread Bundle',
-      'image': 'https://images.unsplash.com/photo-1549931319-a545dcf3bc73?w=300&h=200&fit=crop',
+      'image':
+          'https://images.unsplash.com/photo-1549931319-a545dcf3bc73?w=300&h=200&fit=crop',
       'originalPrice': 899.00,
       'discountedPrice': 719.20,
-      'description': 'Artisan bread from local bakery - perfect for breakfast and snacks',
+      'description':
+          'Artisan bread from local bakery - perfect for breakfast and snacks',
       'expiry': '2024-01-15',
       'provider': 'Manila Bakery Co.',
       'location': 'Makati City',
@@ -38,7 +41,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
     {
       'id': '2',
       'title': 'Organic Vegetables Mix',
-      'image': 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=300&h=200&fit=crop',
+      'image':
+          'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=300&h=200&fit=crop',
       'originalPrice': 1435.00,
       'discountedPrice': 1148.00,
       'description': 'Fresh organic vegetables from Baguio farms',
@@ -49,7 +53,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
     {
       'id': '3',
       'title': 'Dairy Products Pack',
-      'image': 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=300&h=200&fit=crop',
+      'image':
+          'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=300&h=200&fit=crop',
       'originalPrice': 1055.00,
       'discountedPrice': 844.00,
       'description': 'Fresh milk, cheese, and yogurt from local dairy',
@@ -60,7 +65,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
     {
       'id': '4',
       'title': 'Fruit Basket Special',
-      'image': 'https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=300&h=200&fit=crop',
+      'image':
+          'https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=300&h=200&fit=crop',
       'originalPrice': 1240.00,
       'discountedPrice': 992.00,
       'description': 'Seasonal fresh fruits - mangoes, bananas, and more',
@@ -71,7 +77,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
     {
       'id': '5',
       'title': 'Bakery Pastries',
-      'image': 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=300&h=200&fit=crop',
+      'image':
+          'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=300&h=200&fit=crop',
       'originalPrice': 731.00,
       'discountedPrice': 584.80,
       'description': 'Assorted pastries and desserts - perfect for merienda',
@@ -84,20 +91,24 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
   @override
   void initState() {
     super.initState();
-    _fadeController = AnimationController(duration: const Duration(milliseconds: 1500), vsync: this);
-    _slideController = AnimationController(duration: const Duration(milliseconds: 1200), vsync: this);
-    _bounceController = AnimationController(duration: const Duration(milliseconds: 2000), vsync: this);
-    
+    _fadeController = AnimationController(
+        duration: const Duration(milliseconds: 1500), vsync: this);
+    _slideController = AnimationController(
+        duration: const Duration(milliseconds: 1200), vsync: this);
+    _bounceController = AnimationController(
+        duration: const Duration(milliseconds: 2000), vsync: this);
+
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
     );
-    _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.5), end: Offset.zero).animate(
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.5), end: Offset.zero).animate(
       CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
     );
     _bounceAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _bounceController, curve: Curves.elasticOut),
     );
-    
+
     _fadeController.forward();
     _slideController.forward();
     _bounceController.forward();
@@ -155,36 +166,47 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
       body: DefaultTabController(
         length: 2,
         child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.orange.shade100,
-              Colors.green.shade100,
-              Colors.blue.shade50,
-            ],
-            stops: const [0.0, 0.6, 1.0],
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.orange.shade100,
+                Colors.green.shade100,
+                Colors.blue.shade50,
+              ],
+              stops: const [0.0, 0.6, 1.0],
+            ),
           ),
-        ),
-        child: Stack(
-          children: [
-            // Animated floating food icons
-            _buildFloatingIcon(Icons.local_pizza, 60, 30, Colors.orange.shade200, 0.25, 0),
-            _buildFloatingIcon(Icons.bakery_dining, 180, 20, Colors.brown.shade200, 0.20, 1),
-            _buildFloatingIcon(Icons.lunch_dining, 320, 50, Colors.green.shade200, 0.22, 2),
-            _buildFloatingIcon(Icons.fastfood, 450, 40, Colors.orange.shade200, 0.18, 3),
-            _buildFloatingIcon(Icons.restaurant, 140, -10, Colors.green.shade200, 0.16, 4),
-            _buildFloatingIcon(Icons.cake, 380, 10, Colors.pink.shade200, 0.19, 5),
-            _buildFloatingIcon(Icons.coffee, 80, -5, Colors.brown.shade200, 0.17, 6),
-            _buildFloatingIcon(Icons.icecream, 250, 10, Colors.pink.shade200, 0.14, 7),
-            _buildFloatingIcon(Icons.emoji_food_beverage, 500, 20, Colors.orange.shade200, 0.15, 8),
-            _buildFloatingIcon(Icons.ramen_dining, 30, 60, Colors.yellow.shade300, 0.12, 9),
-            _buildFloatingIcon(Icons.breakfast_dining, 280, 5, Colors.orange.shade300, 0.13, 10),
-            
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
+          child: Stack(
+            children: [
+              // Animated floating food icons
+              _buildFloatingIcon(
+                  Icons.local_pizza, 60, 30, Colors.orange.shade200, 0.25, 0),
+              _buildFloatingIcon(
+                  Icons.bakery_dining, 180, 20, Colors.brown.shade200, 0.20, 1),
+              _buildFloatingIcon(
+                  Icons.lunch_dining, 320, 50, Colors.green.shade200, 0.22, 2),
+              _buildFloatingIcon(
+                  Icons.fastfood, 450, 40, Colors.orange.shade200, 0.18, 3),
+              _buildFloatingIcon(
+                  Icons.restaurant, 140, -10, Colors.green.shade200, 0.16, 4),
+              _buildFloatingIcon(
+                  Icons.cake, 380, 10, Colors.pink.shade200, 0.19, 5),
+              _buildFloatingIcon(
+                  Icons.coffee, 80, -5, Colors.brown.shade200, 0.17, 6),
+              _buildFloatingIcon(
+                  Icons.icecream, 250, 10, Colors.pink.shade200, 0.14, 7),
+              _buildFloatingIcon(Icons.emoji_food_beverage, 500, 20,
+                  Colors.orange.shade200, 0.15, 8),
+              _buildFloatingIcon(
+                  Icons.ramen_dining, 30, 60, Colors.yellow.shade300, 0.12, 9),
+              _buildFloatingIcon(Icons.breakfast_dining, 280, 5,
+                  Colors.orange.shade300, 0.13, 10),
+
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 12),
@@ -203,7 +225,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                       child: BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 6, horizontal: 12),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.2),
                             boxShadow: [
@@ -213,16 +236,22 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                                 offset: const Offset(0, -4),
                               ),
                             ],
-                            border: Border.all(color: Colors.white.withOpacity(0.3)),
+                            border: Border.all(
+                                color: Colors.white.withOpacity(0.3)),
                           ),
                           child: TabBar(
                             labelColor: Colors.orange.shade600,
                             unselectedLabelColor: Colors.white.withOpacity(0.8),
                             indicatorColor: Colors.transparent,
-                            labelPadding: const EdgeInsets.symmetric(vertical: 6),
+                            labelPadding:
+                                const EdgeInsets.symmetric(vertical: 6),
                             tabs: const [
-                              Tab(icon: Icon(Icons.home_outlined, size: 28), text: 'Home'),
-                              Tab(icon: Icon(Icons.person_outline, size: 28), text: 'Profile'),
+                              Tab(
+                                  icon: Icon(Icons.home_outlined, size: 28),
+                                  text: 'Home'),
+                              Tab(
+                                  icon: Icon(Icons.person_outline, size: 28),
+                                  text: 'Profile'),
                             ],
                           ),
                         ),
@@ -231,11 +260,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                   ],
                 ),
               ),
-            
-          ],
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 
@@ -243,53 +271,54 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-                    FadeTransition(
-                      opacity: _fadeAnimation,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.grey.shade200),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.orange.shade100,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(
-                                Icons.star,
-                                color: Colors.orange.shade700,
-                                size: 20,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            const Text(
-                              'Featured Deals',
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                                    Expanded(
+        FadeTransition(
+          opacity: _fadeAnimation,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.star,
+                    color: Colors.orange.shade700,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Featured Deals',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Expanded(
           child: FadeTransition(
             opacity: _fadeAnimation,
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final width = constraints.maxWidth;
                 final cross = width >= 1000 ? 4 : (width >= 700 ? 3 : 2);
-               final aspect = width >= 700 ? 0.9 : 0.6;
+                final aspect = width >= 700 ? 0.9 : 0.6;
                 return GridView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: cross,
                     childAspectRatio: aspect,
@@ -304,9 +333,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                 );
               },
             ),
-                                      ),
-                                    ),
-                                  ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -350,7 +379,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                             height: 60,
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
-                                colors: [Colors.green.shade400, Colors.blue.shade400],
+                                colors: [
+                                  Colors.green.shade400,
+                                  Colors.blue.shade400
+                                ],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
@@ -375,7 +407,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  isLoggedIn ? (authService.userData?['name'] ?? authService.currentUser!.email ?? 'Welcome') : 'Welcome to MealDeal',
+                                  isLoggedIn
+                                      ? (authService.userData?['name'] ??
+                                          authService.currentUser!.email ??
+                                          'Welcome')
+                                      : 'Welcome to MealDeal',
                                   style: const TextStyle(
                                     fontSize: 22,
                                     fontWeight: FontWeight.bold,
@@ -384,7 +420,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  isLoggedIn ? 'Explore fresh deals around you' : 'Sign in or create an account to start saving',
+                                  isLoggedIn
+                                      ? 'Explore fresh deals around you'
+                                      : 'Sign in or create an account to start saving',
                                   style: TextStyle(
                                     color: Colors.grey.shade600,
                                     fontSize: 14,
@@ -403,7 +441,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                               ),
                               child: IconButton(
                                 onPressed: () => authService.signOut(),
-                                icon: Icon(Icons.logout, color: Colors.red.shade600, size: 20),
+                                icon: Icon(Icons.logout,
+                                    color: Colors.red.shade600, size: 20),
                                 tooltip: 'Logout',
                               ),
                             ),
@@ -415,7 +454,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                           children: [
                             Expanded(
                               child: _buildModernButton(
-                                onPressed: () => _showAuthModal(context, isLogin: true),
+                                onPressed: () =>
+                                    _showAuthModal(context, isLogin: true),
                                 text: 'Login',
                                 icon: Icons.login_rounded,
                                 backgroundColor: Colors.green.shade600,
@@ -425,8 +465,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                             const SizedBox(width: 12),
                             Expanded(
                               child: _buildModernButton(
-                                onPressed: () => _showAuthModal(context, isLogin: false),
-                                text: 'Register',
+                                onPressed: () =>
+                                    _showAuthModal(context, isLogin: false),
+                                text: 'Sign Up',
                                 icon: Icons.person_add_rounded,
                                 backgroundColor: Colors.blue.shade600,
                                 textColor: Colors.white,
@@ -438,9 +479,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(height: 20),
-                
+
                 // Features Section
                 if (!isLoggedIn) ...[
                   Container(
@@ -468,7 +509,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                                 color: Colors.orange.shade100,
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: Icon(Icons.star_rounded, color: Colors.orange.shade600, size: 20),
+                              child: Icon(Icons.star_rounded,
+                                  color: Colors.orange.shade600, size: 20),
                             ),
                             const SizedBox(width: 12),
                             const Text(
@@ -482,16 +524,22 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                           ],
                         ),
                         const SizedBox(height: 16),
-                        _buildFeatureItem(Icons.savings, 'Save Money', 'Get up to 50% off on surplus food'),
-                        _buildFeatureItem(Icons.eco, 'Reduce Waste', 'Help prevent food waste in your community'),
-                        _buildFeatureItem(Icons.local_grocery_store, 'Surplus Food', 'Quality surplus food that would otherwise go to waste'),
-                        _buildFeatureItem(Icons.timer, 'Quick Pickup', 'Convenient pickup times for your schedule'),
+                        _buildFeatureItem(Icons.savings, 'Save Money',
+                            'Get up to 50% off on surplus food'),
+                        _buildFeatureItem(Icons.eco, 'Reduce Waste',
+                            'Help prevent food waste in your community'),
+                        _buildFeatureItem(
+                            Icons.local_grocery_store,
+                            'Surplus Food',
+                            'Quality surplus food that would otherwise go to waste'),
+                        _buildFeatureItem(Icons.timer, 'Quick Pickup',
+                            'Convenient pickup times for your schedule'),
                       ],
                     ),
                   ),
                   const SizedBox(height: 20),
                 ],
-                
+
                 // Provider CTA Section - Moved to bottom
                 Container(
                   width: double.infinity,
@@ -521,7 +569,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                               color: Colors.white.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(16),
                             ),
-                            child: const Icon(Icons.eco, color: Colors.white, size: 24),
+                            child: const Icon(Icons.eco,
+                                color: Colors.white, size: 24),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
@@ -558,18 +607,22 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white,
                             foregroundColor: Colors.orange.shade700,
-                            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 14, horizontal: 20),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
                             elevation: 2,
                           ),
                           icon: const Icon(Icons.store_rounded, size: 18),
-                          label: const Text('Register', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          label: const Text('Register',
+                              style: TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(height: 20),
               ],
             ),
@@ -646,15 +699,26 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
           backgroundColor: Colors.transparent,
           foregroundColor: textColor,
           shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
         icon: Icon(icon, size: 18),
-        label: Text(text, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+        label: Text(
+          text,
+          softWrap: false,
+          overflow: TextOverflow.fade,
+          maxLines: 1,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildFloatingIcon(IconData icon, double top, double left, Color color, double opacity, int delay) {
+  Widget _buildFloatingIcon(IconData icon, double top, double left, Color color,
+      double opacity, int delay) {
     return Positioned(
       top: top,
       left: left,
@@ -662,7 +726,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
         animation: _bounceController,
         builder: (context, child) {
           return Transform.translate(
-            offset: Offset(0, 5 * _bounceAnimation.value * (delay % 2 == 0 ? 1 : -1)),
+            offset: Offset(
+                0, 5 * _bounceAnimation.value * (delay % 2 == 0 ? 1 : -1)),
             child: Opacity(
               opacity: opacity * _bounceAnimation.value,
               child: IgnorePointer(
@@ -697,10 +762,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
             borderRadius: BorderRadius.circular(12),
           ),
           elevation: isPrimary ? 4 : 0,
-          side: isPrimary ? null : const BorderSide(color: Colors.white, width: 2),
+          side: isPrimary
+              ? null
+              : const BorderSide(color: Colors.white, width: 2),
         ),
         child: Text(
-          text, 
+          text,
           style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 16,
@@ -710,16 +777,19 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
     );
   }
 
-  Widget _buildEnhancedListingCard(BuildContext context, Map<String, dynamic> listing, int index) {
+  Widget _buildEnhancedListingCard(
+      BuildContext context, Map<String, dynamic> listing, int index) {
     return AnimatedBuilder(
       animation: _slideController,
       builder: (context, child) {
         return Transform.translate(
-          offset: Offset(0, 50.0 * (1.0 - _slideAnimation.value.dy) * (index + 1)),
+          offset:
+              Offset(0, 50.0 * (1.0 - _slideAnimation.value.dy) * (index + 1)),
           child: Card(
             elevation: 8,
             color: Colors.black.withValues(alpha: 0.2),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
@@ -747,10 +817,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                             width: double.infinity,
                             decoration: BoxDecoration(
                               color: Colors.grey.shade300,
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                              borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(16)),
                             ),
                             child: ClipRRect(
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                              borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(16)),
                               child: _buildImageFromUrl(listing['image']),
                             ),
                           ),
@@ -760,10 +832,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                           top: 8,
                           right: 8,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
-                                colors: [Colors.red.shade500, Colors.red.shade600],
+                                colors: [
+                                  Colors.red.shade500,
+                                  Colors.red.shade600
+                                ],
                               ),
                               borderRadius: BorderRadius.circular(20),
                               boxShadow: [
@@ -827,7 +903,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                                 ),
                                 const SizedBox(width: 6),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
                                     color: Colors.green.shade100,
                                     borderRadius: BorderRadius.circular(8),
@@ -851,22 +928,29 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                                   child: SizedBox(
                                     height: 32,
                                     child: ElevatedButton(
-                                      onPressed: () => _handleAddToCart(context, listing),
+                                      onPressed: () =>
+                                          _handleAddToCart(context, listing),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Colors.orange.shade400,
                                         foregroundColor: Colors.white,
                                         padding: EdgeInsets.zero,
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
                                         ),
                                         elevation: 2,
                                       ),
                                       child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
-                                          Icon(Icons.add_shopping_cart, size: 14),
+                                          Icon(Icons.add_shopping_cart,
+                                              size: 14),
                                           const SizedBox(width: 4),
-                                          Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                          Text('Add',
+                                              style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600)),
                                         ],
                                       ),
                                     ),
@@ -877,22 +961,28 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                                   child: SizedBox(
                                     height: 32,
                                     child: ElevatedButton(
-                                      onPressed: () => _handleBuyNow(context, listing),
+                                      onPressed: () =>
+                                          _handleBuyNow(context, listing),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Colors.green.shade600,
                                         foregroundColor: Colors.white,
                                         padding: EdgeInsets.zero,
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
                                         ),
                                         elevation: 2,
                                       ),
                                       child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
                                           Icon(Icons.shopping_bag, size: 14),
                                           const SizedBox(width: 4),
-                                          Text('Buy', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                          Text('Buy',
+                                              style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600)),
                                         ],
                                       ),
                                     ),
@@ -982,7 +1072,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Icon(Icons.store, size: 16, color: Colors.grey.shade600),
+                        Icon(Icons.store,
+                            size: 16, color: Colors.grey.shade600),
                         const SizedBox(width: 4),
                         Text(
                           listing['provider'],
@@ -992,7 +1083,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                           ),
                         ),
                         const SizedBox(width: 16),
-                        Icon(Icons.location_on, size: 16, color: Colors.grey.shade600),
+                        Icon(Icons.location_on,
+                            size: 16, color: Colors.grey.shade600),
                         const SizedBox(width: 4),
                         Text(
                           listing['location'],
@@ -1026,7 +1118,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                         ),
                         const Spacer(),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: Colors.green.shade100,
                             borderRadius: BorderRadius.circular(12),
@@ -1060,7 +1153,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                     // Expiry
                     Row(
                       children: [
-                        Icon(Icons.schedule, size: 16, color: Colors.orange.shade600),
+                        Icon(Icons.schedule,
+                            size: 16, color: Colors.orange.shade600),
                         const SizedBox(width: 4),
                         Text(
                           'Best before: ${listing['expiry']}',
@@ -1091,7 +1185,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                               ),
                               elevation: 2,
                             ),
-                            child: const Text('Add to Cart', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                            child: const Text('Add to Cart',
+                                style: TextStyle(
+                                    fontSize: 16, fontWeight: FontWeight.bold)),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -1110,7 +1206,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                               ),
                               elevation: 2,
                             ),
-                            child: const Text('Buy Now', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                            child: const Text('Buy Now',
+                                style: TextStyle(
+                                    fontSize: 16, fontWeight: FontWeight.bold)),
                           ),
                         ),
                       ],
@@ -1145,7 +1243,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
     } else {
       // Buy now logic would go here
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Proceeding to checkout for ${listing['title']}')),
+        SnackBar(
+            content: Text('Proceeding to checkout for ${listing['title']}')),
       );
     }
   }
@@ -1173,7 +1272,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
               ),
             ),
             Expanded(
-              child: isLogin ? const LoginScreen() : const ConsumerRegisterScreen(),
+              child: isLogin
+                  ? const LoginScreen()
+                  : const ConsumerRegisterScreen(),
             ),
           ],
         ),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'package:provider/provider.dart';
+
+import 'auth_service.dart';
 import 'login_screen.dart';
 
 class ConsumerRegisterScreen extends StatefulWidget {
@@ -69,43 +69,41 @@ class _ConsumerRegisterScreenState extends State<ConsumerRegisterScreen> with Ti
     try {
       final email = _emailController.text.trim();
       final password = _passwordController.text;
-      final name = '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}';
+      final name =
+          '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}';
       final phone = _phoneController.text.trim();
       final address = _addressController.text.trim();
-      final role = 'food_consumer'; // Fixed role for consumer
 
-      // Call the API endpoint to register the user
-      final response = await http.post(
-        Uri.parse('http://localhost:8000/api_register.php'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': email,
-          'password': password,
-          'name': name,
-          'phone': phone,
-          'address': address,
-          'role': role,
-        }),
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final result = await authService.registerWithEmailAndPassword(
+        email: email,
+        password: password,
+        name: name,
+        phone: phone,
+        role: 'food_consumer',
+        address: address,
+        extraData: {
+          'first_name': _firstNameController.text.trim(),
+          'last_name': _lastNameController.text.trim(),
+        },
       );
 
-      final responseData = jsonDecode(response.body);
-
-      if (response.statusCode == 200 && responseData['success'] == true) {
-        // Show success message
         if (!mounted) return;
         
-        // Show verification sent message
+      if (result['success'] == true) {
         showDialog(
           context: context,
           barrierDismissible: false,
           builder: (context) => AlertDialog(
             title: const Text('Registration Successful'),
-            content: const Text('A verification email has been sent to your email address. Please verify your email before logging in.'),
+            content: const Text(
+              'We sent a verification link to your email. Please verify before logging in.',
+            ),
             actions: [
               TextButton(
                 onPressed: () {
-                  Navigator.pop(context); // Close dialog
-                  Navigator.pop(context); // Go back to login
+                  Navigator.pop(context);
+                  Navigator.pop(context);
                 },
                 child: const Text('OK'),
               ),
@@ -113,42 +111,21 @@ class _ConsumerRegisterScreenState extends State<ConsumerRegisterScreen> with Ti
           ),
         );
       } else {
-        throw Exception(responseData['message'] ?? 'Registration failed');
+        // Show detailed error message
+        final errorMessage = result['message'] ?? 'Registration failed. Please try again.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
       }
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (!mounted) return;
-      
-      // Show error message
-      String errorMessage = 'Registration failed. Please try again.';
-      
-      if (e is FirebaseAuthException) {
-        switch (e.code) {
-          case 'email-already-in-use':
-            errorMessage = 'An account already exists with this email.';
-            break;
-          case 'weak-password':
-            errorMessage = 'Please choose a stronger password.';
-            break;
-          case 'invalid-email':
-            errorMessage = 'Please enter a valid email address.';
-            break;
-          default:
-            errorMessage = e.message ?? errorMessage;
-        }
-      } else if (e is FirebaseException) {
-        errorMessage = e.message ?? errorMessage;
-      }
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(errorMessage),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-
+    } finally {
+      if (mounted) {
     setState(() => _isLoading = false);
+      }
+    }
   }
 
   @override

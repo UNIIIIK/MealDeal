@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'auth_service.dart';
 import 'register_screen.dart';
 import 'password_reset_screen.dart';
@@ -54,41 +51,44 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     super.dispose();
   }
 
-  Future<void> _resendVerificationEmail() async {
-    try {
-      final email = _emailController.text.trim();
-      final response = await http.post(
-        Uri.parse('http://localhost:8000/resend_verification.php'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email}),
-      );
-
-      final data = jsonDecode(response.body);
-      
+  Future<void> _showVerificationDialog(AuthService authService) async {
       if (!mounted) return;
       
-      if (response.statusCode == 200 && data['success'] == true) {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Verify Your Email'),
+        content: Text(
+          'We sent a verification link to ${_emailController.text.trim()}. '
+          'Open the link to unlock the full app.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final result = await authService.resendEmailVerification();
+              if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(data['message'] ?? 'Verification email resent. Please check your inbox.'),
-            backgroundColor: Colors.green,
+                    content: Text(
+                      result['message'] ?? 'Verification email sent.',
+                    ),
+                    backgroundColor:
+                        result['success'] == true ? Colors.green : Colors.red,
+                  ),
+                );
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Resend Email'),
           ),
-        );
-      } else {
-        throw Exception(data['message'] ?? 'Failed to resend verification email');
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          backgroundColor: Colors.red,
+        ],
         ),
       );
     }
-  }
-
-
 
   Future<void> _signIn() async {
     if (!_formKey.currentState!.validate()) return;
@@ -99,51 +99,18 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       final email = _emailController.text.trim();
       final password = _passwordController.text;
       
-      // Sign in with Firebase Auth
-      final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      // Require email verified via Firebase Auth
-      if (!(userCredential.user?.emailVerified ?? false)) {
-        await FirebaseAuth.instance.signOut();
-        if (!mounted) return;
-        
-        // Show resend verification option
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Email Not Verified'),
-            content: const Text('Please verify your email before logging in. Would you like to resend the verification email?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  Navigator.pop(context);
-                  await _resendVerificationEmail();
-                },
-                child: const Text('Resend Email'),
-              ),
-            ],
-          ),
-        );
-        
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      // If we get here, email is verified - proceed with normal login
       final authService = Provider.of<AuthService>(context, listen: false);
-      final result = await authService.signInWithEmailAndPassword(email, password);
+      final result =
+          await authService.signInWithEmailAndPassword(email, password);
 
-      if (mounted) {
-        if (result['success']) {
-          // Navigate based on role if loaded, else default to consumer
-          // Note: userRole variable removed as it wasn't being used
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        final requiresVerification = result['requiresVerification'] == true;
+
+        if (requiresVerification) {
+          await _showVerificationDialog(authService);
+        }
           
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
@@ -152,50 +119,19 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           );
           
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Welcome back!'),
-              backgroundColor: Colors.green,
+          SnackBar(
+            content: Text(
+              requiresVerification
+                  ? 'Please verify your email to continue.'
+                  : 'Welcome back!',
+            ),
+            backgroundColor: requiresVerification ? Colors.orange : Colors.green,
             ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(result['message'] ?? 'Login failed'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } on FirebaseAuthException catch (e) {
-      String message;
-      switch (e.code) {
-        case 'user-not-found':
-          message = 'No account found with this email.';
-          break;
-        case 'wrong-password':
-          message = 'Incorrect password. Please try again.';
-          break;
-        case 'user-disabled':
-          message = 'This account has been disabled.';
-          break;
-        default:
-          message = 'An error occurred. Please try again.';
-      }
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('Login unexpected error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Unexpected error: $e'),
             backgroundColor: Colors.red,
           ),
         );

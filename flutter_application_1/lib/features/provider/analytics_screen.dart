@@ -121,12 +121,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       body: FutureBuilder<QuerySnapshot<Map<String, dynamic>>>(
         future: query.get(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-          if (snapshot.hasError) {
-            return Center(
+              if (snapshot.hasError) {
+                return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -189,7 +189,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     ],
                   ),
                 );
-              }
+          }
 
           if (dayToSaved.isEmpty) {
                 return Center(
@@ -501,7 +501,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           );
         },
       ),
-    );
+        );
       },
     );
   }

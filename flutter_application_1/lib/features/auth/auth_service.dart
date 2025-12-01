@@ -1,8 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 
 class AuthService extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -61,6 +59,53 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  /// Recursively merge extraData into profileData, properly handling nested maps
+  /// and ensuring all values are Firestore-compatible
+  void _mergeExtraData(
+      Map<String, dynamic> profileData, Map<String, dynamic> extraData) {
+    for (final entry in extraData.entries) {
+      final key = entry.key;
+      final value = entry.value;
+
+      // Skip null values
+      if (value == null) continue;
+
+      // Handle nested maps recursively
+      if (value is Map<String, dynamic> || value is Map) {
+        // Convert to Map<String, dynamic> and recursively process
+        final nestedMap = Map<String, dynamic>.from(value);
+        final processedMap = <String, dynamic>{};
+        _mergeExtraData(processedMap, nestedMap);
+        profileData[key] = processedMap;
+      }
+      // Handle lists - ensure they contain Firestore-compatible types
+      else if (value is List) {
+        profileData[key] = value.map((item) {
+          if (item is Map) {
+            final processedMap = <String, dynamic>{};
+            _mergeExtraData(processedMap, Map<String, dynamic>.from(item));
+            return processedMap;
+          }
+          return item;
+        }).toList();
+      }
+      // Primitive types (String, int, double, bool) are Firestore-compatible
+      else if (value is String ||
+          value is int ||
+          value is double ||
+          value is bool ||
+          value is DateTime) {
+        profileData[key] = value;
+      }
+      // For any other type, convert to String to avoid invalid-argument errors
+      else {
+        debugPrint(
+            'Warning: Converting unsupported type ${value.runtimeType} to String for Firestore');
+        profileData[key] = value.toString();
+      }
+    }
+  }
+
   Future<void> _safeReload(User user) async {
     try {
       await user.reload();
@@ -95,37 +140,6 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  // ✔ SAFE, does not spam backend
-  Future<Map<String, dynamic>> sendEmailVerification() async {
-    try {
-      final email = currentUser?.email;
-      if (email == null) {
-        return {'success': false, 'message': 'No signed-in user.'};
-      }
-
-      final response = await http.post(
-        Uri.parse('http://localhost:8000/resend_verification.php'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email}),
-      );
-
-      final data = jsonDecode(response.body);
-      if (response.statusCode == 200 && data['success'] == true) {
-        return {'success': true, 'message': data['message']};
-      }
-
-      return {
-        'success': false,
-        'message': data['message'] ?? 'Failed to send verification email.'
-      };
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error: ${e.toString()}',
-      };
-    }
-  }
-
   Future<void> resendVerificationEmail(String email, String password) async {
     try {
       final credential = await _auth.signInWithEmailAndPassword(
@@ -154,6 +168,7 @@ class AuthService extends ChangeNotifier {
     required String phone,
     required String role,
     required String address,
+    Map<String, dynamic>? extraData,
   }) async {
     try {
       if (!['food_provider', 'food_consumer'].contains(role)) {
@@ -167,7 +182,7 @@ class AuthService extends ChangeNotifier {
 
       final uid = credential.user!.uid;
 
-      await _firestore.collection('users').doc(uid).set({
+      final profileData = {
         'uid': uid,
         'name': name,
         'email': email,
@@ -178,9 +193,23 @@ class AuthService extends ChangeNotifier {
         'emailVerified': false,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      };
 
+      if (extraData != null && extraData.isNotEmpty) {
+        // Properly merge extraData, handling nested maps recursively
+        _mergeExtraData(profileData, extraData);
+      }
+
+      await _firestore.collection('users').doc(uid).set(profileData);
+
+      // Use Firebase's default email verification (no custom actionCodeSettings)
+      // IMPORTANT: If verification emails still contain localhost:8000, 
+      // you must remove the custom action handler URL in Firebase Console:
+      // Authentication → Templates → Email address verification → Action URL
+      // Leave it empty to use Firebase's default handler
       await credential.user!.sendEmailVerification();
+      await _safeReload(credential.user!);
+      await _auth.signOut();
       await _loadUserData(uid);
 
       return {
@@ -190,9 +219,15 @@ class AuthService extends ChangeNotifier {
         'needsVerification': true,
       };
     } on FirebaseAuthException catch (e) {
+      debugPrint('Firebase Auth Error during registration: ${e.code} - ${e.message}');
       return _authError(e);
-    } catch (_) {
-      return {'success': false, 'message': 'Unexpected error.'};
+    } catch (e, stackTrace) {
+      debugPrint('Unexpected error during registration: $e');
+      debugPrint('Stack trace: $stackTrace');
+      return {
+        'success': false,
+        'message': 'Registration failed: ${e.toString()}',
+      };
     }
   }
 
@@ -207,21 +242,15 @@ class AuthService extends ChangeNotifier {
         password: password,
       );
 
-      if (!credential.user!.emailVerified) {
-        await _auth.signOut();
-        return {
-          'success': false,
-          'code': 'email-not-verified',
-          'message': 'Please verify your email first.',
-        };
-      }
-
       await _loadUserData(credential.user!.uid);
 
       return {
         'success': true,
-        'message': 'Sign in successful!',
+        'message': credential.user!.emailVerified
+            ? 'Sign in successful!'
+            : 'Please verify your email.',
         'user': credential.user,
+        'requiresVerification': !(credential.user!.emailVerified),
       };
     } on FirebaseAuthException catch (e) {
       return _authError(e);
@@ -266,10 +295,21 @@ class AuthService extends ChangeNotifier {
   // --------------------------
   Future<Map<String, dynamic>> resendEmailVerification() async {
     try {
-      await currentUser?.sendEmailVerification();
+      if (currentUser == null) {
+        return {'success': false, 'message': 'Please sign in first.'};
+      }
+
+      // Use Firebase's default email verification (no custom actionCodeSettings)
+      // The verification link will use Firebase's built-in handler page
+      await currentUser!.sendEmailVerification();
       return {'success': true, 'message': 'Verification email sent!'};
-    } catch (_) {
-      return {'success': false, 'message': 'Error sending verification email.'};
+    } catch (e) {
+      return {
+        'success': false,
+        'message': e is FirebaseAuthException
+            ? (e.message ?? 'Error sending verification email.')
+            : 'Error sending verification email.'
+      };
     }
   }
 
@@ -329,10 +369,19 @@ class AuthService extends ChangeNotifier {
     if (currentUser == null) return;
 
     try {
+      // Reload user to get latest emailVerified status from Firebase
       await currentUser!.reload();
       await _loadUserData(currentUser!.uid);
+      
+      // Sync Firestore verified field with Firebase Auth emailVerified status
+      if (currentUser!.emailVerified && (_userData?['verified'] != true)) {
+        await updateVerificationStatus(true);
+      }
+      
       notifyListeners();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Error reloading user: $e');
+    }
   }
 
   Future<void> syncVerificationStatus() async {
