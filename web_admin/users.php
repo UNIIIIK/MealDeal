@@ -12,56 +12,6 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
     <link href="assets/css/admin.css" rel="stylesheet">
-    <style>
-        .user-card {
-            background: white;
-            border-radius: 10px;
-            padding: 1.5rem;
-            margin-bottom: 1rem;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            border-left: 4px solid #28a745;
-        }
-        .user-card.banned {
-            border-left-color: #dc3545;
-            background-color: #fff5f5;
-        }
-        .user-card.restricted {
-            border-left-color: #ffc107;
-            background-color: #fffbf0;
-        }
-        .status-badge {
-            font-size: 0.8rem;
-            padding: 0.4rem 0.8rem;
-        }
-        .action-buttons {
-            display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-        }
-        .stats-card {
-            background: linear-gradient(135deg, #28a745, #20c997);
-            color: white;
-            border-radius: 15px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.3);
-        }
-        .dispute-item {
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-        }
-        .dispute-item.resolved {
-            background: #d4edda;
-            border-color: #c3e6cb;
-        }
-        .dispute-item.urgent {
-            background: #f8d7da;
-            border-color: #f5c6cb;
-        }
-    </style>
 </head>
 <body>
     <!-- Navigation (consistent with sidebar layout) -->

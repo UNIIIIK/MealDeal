@@ -1,18 +1,47 @@
-/* Admin Dashboard Styles */
+
 :root {
-    --primary-color: #198754;
-    --secondary-color: #6c757d;
-    --success-color: #198754;
-    --warning-color: #ffc107;
-    --danger-color: #dc3545;
-    --info-color: #0dcaf0;
-    --light-color: #f8f9fa;
-    --dark-color: #212529;
+    --primary-color: #198754;          /* Navbar, primary accents */
+    --secondary-color: #6c757d;        /* Secondary text */
+    --success-color: #198754;          /* Bootstrap success */
+    --warning-color: #ffc107;          /* Bootstrap warning */
+    --danger-color: #dc3545;           /* Bootstrap danger */
+    --info-color: #0dcaf0;             /* Bootstrap info */
+    --light-color: #f8f9fa;            /* Light surfaces */
+    --dark-color: #212529;             /* Primary body text */
+    --page-bg-color: #f7f9fc;          /* Default dashboard background */
+
+    /* Strong status colors used across moderation/pricing/users pages */
+    --success-strong: #28a745;
+    --teal-strong: #20c997;
+    --warning-strong: #ffc107;
+    --danger-strong: #dc3545;
+    --info-strong: #0d6efd;
+
+    /* Gradients for hero/stat cards */
+    --hero-green: linear-gradient(135deg, #28a745, #20c997);
+    --hero-gold: linear-gradient(45deg, #ffd700, #ffed4e);
+    --hero-silver: linear-gradient(45deg, #c0c0c0, #e5e5e5);
+    --hero-bronze: linear-gradient(45deg, #cd7f32, #daa520);
+
+    /* Chart palette consumed by assets/js/leaderboard.js */
+    --chart-green: #28a745;
+    --chart-teal: #20c997;
+    --chart-yellow: #ffc107;
+    --chart-red: #dc3545;
+    --chart-blue: #0d6efd;
+    --chart-purple: #6f42c1;
+    --chart-grid: rgba(0,0,0,0.1);
+    --chart-green-surface: rgba(40, 167, 69, 0.1);
+    --chart-teal-surface: rgba(32, 201, 151, 0.1);
+    --chart-yellow-surface: rgba(255, 193, 7, 0.1);
+    --chart-red-surface: rgba(220, 53, 69, 0.1);
+    --chart-blue-surface: rgba(13, 110, 253, 0.1);
+    --chart-purple-surface: rgba(111, 66, 193, 0.1);
 }
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #f8f9fa;
+    background-color: var(--page-bg-color);
 }
 
 /* Sidebar Styles */
@@ -120,17 +149,17 @@ body {
 }
 
 .leaderboard-card .rank-badge.rank-1 {
-    background: linear-gradient(45deg, #ffd700, #ffed4e);
+    background: var(--hero-gold);
     box-shadow: 0 4px 8px rgba(255, 215, 0, 0.3);
 }
 
 .leaderboard-card .rank-badge.rank-2 {
-    background: linear-gradient(45deg, #c0c0c0, #e5e5e5);
+    background: var(--hero-silver);
     box-shadow: 0 4px 8px rgba(192, 192, 192, 0.3);
 }
 
 .leaderboard-card .rank-badge.rank-3 {
-    background: linear-gradient(45deg, #cd7f32, #daa520);
+    background: var(--hero-bronze);
     box-shadow: 0 4px 8px rgba(205, 127, 50, 0.3);
 }
 
@@ -170,7 +199,7 @@ body {
     border-top: none;
     font-weight: 600;
     color: var(--dark-color);
-    background-color: #f8f9fa;
+    background-color: var(--light-color);
 }
 
 .table td {
@@ -269,7 +298,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #0d6efd;
+    background: var(--info-strong);
 }
 
 /* Animation Classes */
@@ -324,6 +353,399 @@ body {
 .form-select:focus {
     box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25);
     border-color: var(--primary-color);
+}
+
+/* ------------------------------
+ * Dashboard (dashboard.php)
+ * ------------------------------ */
+.page-dashboard {
+    background: var(--page-bg-color);
+}
+
+.dashboard-container {
+    padding: 20px;
+}
+
+.dashboard-title {
+    margin-bottom: 20px;
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+}
+
+.dashboard-card {
+    background: #fff;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+.dashboard-card h2 {
+    margin: 10px 0;
+    font-size: 28px;
+    color: #2c3e50;
+}
+
+.dashboard-card span {
+    font-size: 14px;
+    color: #7f8c8d;
+}
+
+/* ------------------------------
+ * Impact Tracking (impact.php)
+ * ------------------------------ */
+.impact-card {
+    background: var(--hero-green);
+    color: white;
+    border-radius: 15px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 8px 25px rgba(40, 167, 69, 0.3);
+}
+
+.impact-metric {
+    text-align: center;
+    padding: 1rem;
+}
+
+.impact-metric h3 {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.impact-metric p {
+    font-size: 1.1rem;
+    opacity: 0.9;
+}
+
+.user-contribution {
+    background: white;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    border-left: 4px solid var(--success-strong);
+}
+
+.contribution-badge {
+    background: #e8f5e8;
+    color: var(--success-strong);
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: bold;
+    display: inline-block;
+}
+
+.chart-container {
+    background: white;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    min-height: 280px;
+}
+
+.chart-container canvas {
+    max-height: 320px;
+    width: 100% !important;
+    height: 280px !important;
+}
+
+.loading {
+    text-align: center;
+    padding: 3rem;
+}
+
+.spinner-border {
+    color: var(--success-strong);
+}
+
+/* ------------------------------
+ * Listings (listings.php)
+ * ------------------------------ */
+.listing-card {
+    background: white;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    border-left: 4px solid var(--success-strong);
+}
+
+.listing-card.flagged {
+    border-left-color: var(--danger-strong);
+    background-color: #fff5f5;
+}
+
+.listing-card.pending {
+    border-left-color: var(--warning-strong);
+    background-color: #fffbf0;
+}
+
+.listing-card.approved {
+    border-left-color: var(--success-strong);
+    background-color: #f8fff8;
+}
+
+.listing-image {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.moderation-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.stats-card {
+    background: var(--hero-green);
+    color: white;
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 8px 25px rgba(40, 167, 69, 0.3);
+}
+
+.flag-item {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.flag-item.high-priority {
+    background: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+.ai-analysis {
+    background: #e7f3ff;
+    border: 1px solid #b3d9ff;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+.quality-score {
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.quality-score.excellent { color: var(--success-strong); }
+.quality-score.good { color: var(--teal-strong); }
+.quality-score.fair { color: var(--warning-strong); }
+.quality-score.poor { color: var(--danger-strong); }
+
+/* ------------------------------
+ * Pricing (pricing.php)
+ * ------------------------------ */
+.badge-other {
+    background-color: var(--info-strong);
+    color: white;
+    font-weight: bold;
+    border: 2px solid #000080;
+    box-shadow: 1px 1px 3px rgba(0,0,0,0.3);
+}
+
+.compliance-card {
+    background: white;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    border-left: 4px solid var(--success-strong);
+}
+
+.compliance-card.violation {
+    border-left-color: var(--danger-strong);
+    background-color: #fff5f5;
+}
+
+.compliance-card.warning {
+    border-left-color: var(--warning-strong);
+    background-color: #fffbf0;
+}
+
+.compliance-card.compliant {
+    border-left-color: var(--success-strong);
+    background-color: #f8fff8;
+}
+
+.pricing-info {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.pricing-values {
+    min-width: 180px;
+}
+
+.pricing-values strong {
+    display: inline-block;
+    width: 95px;
+}
+
+.price-comparison {
+    background: var(--light-color);
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 0.5rem 0;
+}
+
+.listing-description {
+    white-space: normal;
+    word-break: break-word;
+}
+
+.discount-badge {
+    font-size: 0.9rem;
+    padding: 0.3rem 0.8rem;
+}
+
+.discount-badge.compliant {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.discount-badge.violation {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.discount-badge.warning {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.compliance-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.alert-item {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.alert-item.high-priority {
+    background: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+.alert-item.resolved {
+    background: #d4edda;
+    border-color: #c3e6cb;
+}
+
+/* ------------------------------
+ * Users (users.php)
+ * ------------------------------ */
+.user-card {
+    background: white;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    border-left: 4px solid var(--success-strong);
+}
+
+.user-card.banned {
+    border-left-color: var(--danger-strong);
+    background-color: #fff5f5;
+}
+
+.user-card.restricted {
+    border-left-color: var(--warning-strong);
+    background-color: #fffbf0;
+}
+
+.status-badge {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.8rem;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.dispute-item {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.dispute-item.resolved {
+    background: #d4edda;
+    border-color: #c3e6cb;
+}
+
+.dispute-item.urgent {
+    background: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+/* ------------------------------
+ * Login (login.php)
+ * ------------------------------ */
+.login-page {
+    background-color: var(--light-color);
+}
+
+.login-card {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.login-icon {
+    color: var(--primary-color);
+}
+
+.login-title {
+    color: var(--primary-color);
+}
+
+.login-subtitle {
+    color: var(--secondary-color);
+}
+
+.login-btn {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.login-btn:hover {
+    background-color: var(--success-strong);
+    border-color: var(--success-strong);
+}
+
+.login-footer-text {
+    color: var(--secondary-color);
+}
+
+/* ------------------------------
+ * Index/Dashboard Reports (index.php)
+ * ------------------------------ */
+.report-badge-unknown {
+    background-color: var(--secondary-color) !important;
+    color: white;
 }
 
 /* Print Styles */

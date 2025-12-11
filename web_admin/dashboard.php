@@ -13,44 +13,26 @@ if (!isset($_SESSION['admin_id'])) {
 <head>
     <meta charset="UTF-8">
     <title>MealDeal Admin Dashboard</title>
-    <link rel="stylesheet" href="assets/css/style.css">
-    <style>
-        body { font-family: Arial, sans-serif; margin: 0; background: #f7f9fc; }
-        .container { padding: 20px; }
-        h1 { margin-bottom: 20px; }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 20px;
-        }
-        .card {
-            background: #fff;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-            text-align: center;
-        }
-        .card h2 { margin: 10px 0; font-size: 28px; color: #2c3e50; }
-        .card span { font-size: 14px; color: #7f8c8d; }
-    </style>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/admin.css">
 </head>
-<body>
-<div class="container">
-    <h1>Admin Dashboard</h1>
-    <div class="stats-grid">
-        <div class="card">
+<body class="page-dashboard">
+<div class="container dashboard-container">
+    <h1 class="dashboard-title">Admin Dashboard</h1>
+    <div class="dashboard-grid">
+        <div class="dashboard-card">
             <h2 id="users_count">--</h2>
             <span>Users</span>
         </div>
-        <div class="card">
+        <div class="dashboard-card">
             <h2 id="posts_count">--</h2>
             <span>Food Posts</span>
         </div>
-        <div class="card">
+        <div class="dashboard-card">
             <h2 id="orders_count">--</h2>
             <span>Orders</span>
         </div>
-        <div class="card">
+        <div class="dashboard-card">
             <h2 id="revenue_total">--</h2>
             <span>Total Revenue</span>
         </div>

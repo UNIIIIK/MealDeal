@@ -211,14 +211,26 @@ $topProviders       = $dashboard['top_providers'] ?? [];
                                     <tbody>
                                         <?php foreach ($recentReports as $report): ?>
                                         <tr>
-                                            <td><span class="badge bg-<?php echo $report['type']=='inappropriate'?'danger':($report['type']=='poor_quality'?'warning':'info'); ?>">
-                                                <?php echo ucfirst(str_replace('_',' ',$report['type'])); ?>
-                                            </span></td>
-                                            <td><?php echo htmlspecialchars($report['reporter_name']); ?></td>
+                                            <td>
+                                                <?php 
+                                                $reportType = $report['type'] ?? '';
+                                                $typeDisplay = !empty($reportType) ? ucfirst(str_replace('_',' ',$reportType)) : 'Unknown';
+                                                $typeClass = '';
+                                                if (empty($reportType) || strtolower($typeDisplay) === 'unknown') {
+                                                    $typeClass = 'report-badge-unknown';
+                                                } else {
+                                                    $typeClass = $reportType == 'inappropriate' ? 'bg-danger' : ($reportType == 'poor_quality' ? 'bg-warning' : 'bg-info');
+                                                }
+                                                ?>
+                                                <span class="badge <?php echo $typeClass; ?>">
+                                                    <?php echo htmlspecialchars($typeDisplay); ?>
+                                                </span>
+                                            </td>
+                                            <td><?php echo htmlspecialchars($report['reporter_name'] ?? 'N/A'); ?></td>
                                             <td><span class="badge bg-<?php echo $report['status']=='pending'?'warning':'success'; ?>">
-                                                <?php echo ucfirst($report['status']); ?>
+                                                <?php echo ucfirst($report['status'] ?? 'unknown'); ?>
                                             </span></td>
-                                            <td><?php echo date('M j, Y', strtotime($report['created_at'])); ?></td>
+                                            <td><?php echo date('M j, Y', strtotime($report['created_at'] ?? 'now')); ?></td>
                                         </tr>
                                         <?php endforeach; ?>
                                     </tbody>
@@ -266,3 +278,4 @@ $topProviders       = $dashboard['top_providers'] ?? [];
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
+

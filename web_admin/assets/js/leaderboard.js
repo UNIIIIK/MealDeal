@@ -1,5 +1,25 @@
 // leaderboard.js
 
+const chartPalette = (() => {
+    const styles = getComputedStyle(document.documentElement);
+    const read = (name, fallback) => (styles.getPropertyValue(name) || '').trim() || fallback;
+    return {
+        green: read('--chart-green', '#28a745'),
+        teal: read('--chart-teal', '#20c997'),
+        yellow: read('--chart-yellow', '#ffc107'),
+        red: read('--chart-red', '#dc3545'),
+        blue: read('--chart-blue', '#0d6efd'),
+        purple: read('--chart-purple', '#6f42c1'),
+        grid: read('--chart-grid', 'rgba(0,0,0,0.1)'),
+        greenSurface: read('--chart-green-surface', 'rgba(40, 167, 69, 0.1)'),
+        tealSurface: read('--chart-teal-surface', 'rgba(32, 201, 151, 0.1)'),
+        yellowSurface: read('--chart-yellow-surface', 'rgba(255, 193, 7, 0.1)'),
+        redSurface: read('--chart-red-surface', 'rgba(220, 53, 69, 0.1)'),
+        blueSurface: read('--chart-blue-surface', 'rgba(13, 110, 253, 0.1)'),
+        purpleSurface: read('--chart-purple-surface', 'rgba(111, 66, 193, 0.1)')
+    };
+})();
+
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize charts with real data from the backend when available
     initializeCharts();
@@ -55,8 +75,8 @@ function initializeCharts() {
                 datasets: [{
                     label: 'Food Saved (kg)',
                     data: foodSavedData,
-                    borderColor: 'rgb(40, 167, 69)',
-                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        borderColor: chartPalette.green,
+                        backgroundColor: chartPalette.greenSurface,
                     tension: 0.4,
                     fill: true
                 }]
@@ -73,7 +93,7 @@ function initializeCharts() {
                     y: {
                         beginAtZero: true,
                         grid: {
-                            color: 'rgba(0,0,0,0.1)'
+                            color: chartPalette.grid
                         }
                     },
                     x: {
@@ -96,8 +116,8 @@ function initializeCharts() {
                 datasets: [{
                     label: 'Orders',
                     data: ordersData,
-                    borderColor: 'rgb(255, 193, 7)',
-                    backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                        borderColor: chartPalette.yellow,
+                        backgroundColor: chartPalette.yellowSurface,
                     tension: 0.4,
                     fill: true
                 }]
@@ -114,7 +134,7 @@ function initializeCharts() {
                     y: {
                         beginAtZero: true,
                         grid: {
-                            color: 'rgba(0,0,0,0.1)'
+                            color: chartPalette.grid
                         }
                     },
                     x: {
@@ -137,8 +157,8 @@ function initializeCharts() {
                 datasets: [{
                     label: 'Active Users',
                     data: usersData,
-                    borderColor: 'rgb(13, 202, 240)',
-                    backgroundColor: 'rgba(13, 202, 240, 0.1)',
+                    borderColor: chartPalette.teal,
+                    backgroundColor: chartPalette.tealSurface,
                     tension: 0.4,
                     fill: true
                 }]
@@ -155,7 +175,7 @@ function initializeCharts() {
                     y: {
                         beginAtZero: true,
                         grid: {
-                            color: 'rgba(0,0,0,0.1)'
+                            color: chartPalette.grid
                         }
                     },
                     x: {
@@ -178,8 +198,8 @@ function initializeCharts() {
                 datasets: [{
                     label: 'Revenue (₱)',
                     data: revenueData,
-                    borderColor: 'rgb(111, 66, 193)',
-                    backgroundColor: 'rgba(111, 66, 193, 0.1)',
+                    borderColor: chartPalette.purple,
+                    backgroundColor: chartPalette.purpleSurface,
                     tension: 0.4,
                     fill: true
                 }]
@@ -196,7 +216,7 @@ function initializeCharts() {
                     y: {
                         beginAtZero: true,
                         grid: {
-                            color: 'rgba(0,0,0,0.1)'
+                            color: chartPalette.grid
                         },
                         ticks: {
                             callback: function(value) {

@@ -13,73 +13,6 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="assets/css/admin.css" rel="stylesheet">
-    <style>
-        .listing-card {
-            background: white;
-            border-radius: 10px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            border-left: 4px solid #28a745;
-        }
-        .listing-card.flagged {
-            border-left-color: #dc3545;
-            background-color: #fff5f5;
-        }
-        .listing-card.pending {
-            border-left-color: #ffc107;
-            background-color: #fffbf0;
-        }
-        .listing-card.approved {
-            border-left-color: #28a745;
-            background-color: #f8fff8;
-        }
-        .listing-image {
-            width: 100px;
-            height: 100px;
-            object-fit: cover;
-            border-radius: 8px;
-        }
-        .moderation-actions {
-            display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-        }
-        .stats-card {
-            background: linear-gradient(135deg, #28a745, #20c997);
-            color: white;
-            border-radius: 15px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.3);
-        }
-        .flag-item {
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-        }
-        .flag-item.high-priority {
-            background: #f8d7da;
-            border-color: #f5c6cb;
-        }
-        .ai-analysis {
-            background: #e7f3ff;
-            border: 1px solid #b3d9ff;
-            border-radius: 8px;
-            padding: 1rem;
-            margin-top: 1rem;
-        }
-        .quality-score {
-            font-size: 1.2rem;
-            font-weight: bold;
-        }
-        .quality-score.excellent { color: #28a745; }
-        .quality-score.good { color: #20c997; }
-        .quality-score.fair { color: #ffc107; }
-        .quality-score.poor { color: #dc3545; }
-    </style>
 </head>
 <body>
     <?php include 'partials/header.php'; ?>
@@ -340,7 +273,8 @@ if (!isAdminLoggedIn()) { header('Location: login.php'); exit(); }
 
         async function loadListings() {
             try {
-                const response = await fetch('api/get_listings.php?limit=100');
+                // Use the cached 50-listing endpoint to keep the page snappy
+                const response = await fetch('api/get_listings.php?limit=50');
                 const data = await response.json();
                 
                 if (data.success) {

@@ -49,61 +49,7 @@ $impactFallback = [
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Impact Tracking - MealDeal Admin</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.css" rel="stylesheet">
     <link href="assets/css/admin.css" rel="stylesheet">
-    <style>
-        .impact-card {
-            background: linear-gradient(135deg, #28a745, #20c997);
-            color: white;
-            border-radius: 15px;
-            padding: 2rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.3);
-        }
-        .impact-metric {
-            text-align: center;
-            padding: 1rem;
-        }
-        .impact-metric h3 {
-            font-size: 2.5rem;
-            font-weight: bold;
-            margin-bottom: 0.5rem;
-        }
-        .impact-metric p {
-            font-size: 1.1rem;
-            opacity: 0.9;
-        }
-        .user-contribution {
-            background: white;
-            border-radius: 10px;
-            padding: 1.5rem;
-            margin-bottom: 1rem;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            border-left: 4px solid #28a745;
-        }
-        .contribution-badge {
-            background: #e8f5e8;
-            color: #28a745;
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
-            font-weight: bold;
-            display: inline-block;
-        }
-        .chart-container {
-            background: white;
-            border-radius: 10px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        }
-        .loading {
-            text-align: center;
-            padding: 3rem;
-        }
-        .spinner-border {
-            color: #28a745;
-        }
-    </style>
 </head>
 <body>
     <!-- Navigation (consistent with sidebar layout) -->
@@ -206,12 +152,12 @@ $impactFallback = [
             <div class="col-lg-8">
                 <div class="chart-container">
                     <h5 class="mb-3">Food Waste Reduction Over Time</h5>
-                    <canvas id="foodWasteChart" width="400" height="200"></canvas>
+                    <canvas id="foodWasteChart"></canvas>
                 </div>
 
                 <div class="chart-container">
                     <h5 class="mb-3">User Contributions by Category</h5>
-                    <canvas id="contributionChart" width="400" height="200"></canvas>
+                    <canvas id="contributionChart"></canvas>
                 </div>
             </div>
 
@@ -494,6 +440,7 @@ $impactFallback = [
                 },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: false,
                     scales: {
                         y: {
                             beginAtZero: true
@@ -516,6 +463,7 @@ $impactFallback = [
                 },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: false,
                     plugins: {
                         legend: {
                             position: 'bottom'

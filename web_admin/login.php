@@ -37,19 +37,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MealDeal Admin Login</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="assets/css/admin.css" rel="stylesheet">
 </head>
-<body class="bg-light">
+<body class="login-page">
     <div class="container">
         <div class="row justify-content-center mt-5">
             <div class="col-md-6 col-lg-4">
-                <div class="card shadow-lg">
+                <div class="card login-card shadow-lg">
                     <div class="card-body p-5">
                         <div class="text-center mb-4">
-                            <i class="fas fa-leaf fa-3x text-success mb-3"></i>
-                            <h2 class="text-success">MealDeal</h2>
-                            <h5 class="text-muted">Super Admin Login</h5>
+                            <i class="fas fa-leaf fa-3x login-icon mb-3"></i>
+                            <h2 class="login-title">MealDeal</h2>
+                            <h5 class="login-subtitle">Super Admin Login</h5>
                         </div>
                         
                         <?php if (!empty($error)): ?>
@@ -81,14 +82,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             </div>
                             
                             <div class="d-grid">
-                                <button type="submit" class="btn btn-success btn-lg">
+                                <button type="submit" class="btn login-btn btn-lg">
                                     <i class="fas fa-sign-in-alt me-2"></i>Login
                                 </button>
                             </div>
                         </form>
                         
                         <div class="text-center mt-4">
-                            <small class="text-muted">
+                            <small class="login-footer-text">
                                 <i class="fas fa-shield-alt me-1"></i>
                                 Secure admin access only
                             </small>

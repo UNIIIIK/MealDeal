@@ -53,32 +53,123 @@
 
 ```
 MealDeal/
-├── flutter_application_1/          # Flutter mobile app
+├── flutter_application_1/          # Flutter mobile application
 │   ├── lib/
 │   │   ├── features/              # Feature-based architecture
-│   │   │   ├── auth/             # Authentication features
-│   │   │   ├── consumer/         # Consumer-specific features
-│   │   │   ├── provider/         # Provider-specific features
-│   │   │   ├── messaging/        # Chat and messaging
-│   │   │   └── welcome/          # Onboarding screens
+│   │   │   ├── auth/              # Authentication screens & logic
+│   │   │   ├── consumer/          # Consumer-specific features
+│   │   │   ├── provider/          # Provider-specific features
+│   │   │   ├── messaging/         # Chat and messaging system
+│   │   │   └── welcome/           # Onboarding screens
 │   │   ├── services/             # Business logic services
+│   │   │   ├── firestore_helper.dart
+│   │   │   ├── geo_service.dart
+│   │   │   ├── location_service.dart
+│   │   │   ├── messaging_service.dart
+│   │   │   └── routing_service.dart
 │   │   ├── models/               # Data models
-│   │   └── widgets/              # Reusable UI components
-│   ├── android/                  # Android-specific configuration
-│   ├── ios/                      # iOS-specific configuration
-│   └── pubspec.yaml             # Flutter dependencies
-├── web_admin/                    # Web admin dashboard
-│   ├── assets/                   # CSS, JS, and static files
+│   │   │   └── message.dart
+│   │   ├── providers/            # State management providers
+│   │   ├── screens/              # Screen components
+│   │   ├── theme/                # App theming
+│   │   │   └── app_theme.dart
+│   │   ├── widgets/              # Reusable UI components
+│   │   ├── firebase_options.dart  # Firebase configuration
+│   │   └── main.dart             # App entry point
+│   ├── android/                  # Android platform configuration
+│   │   ├── app/
+│   │   │   ├── build.gradle
+│   │   │   ├── google-services.json
+│   │   │   └── src/              # Android source files
+│   │   └── gradle/                # Gradle wrapper
+│   ├── ios/                      # iOS platform configuration
+│   │   ├── Runner/
+│   │   │   ├── AppDelegate.swift
+│   │   │   └── Assets.xcassets/
+│   │   └── Runner.xcodeproj/
+│   ├── web/                      # Web platform files
+│   │   ├── index.html
+│   │   └── manifest.json
+│   ├── backend/                  # PHP backend services (legacy)
+│   │   ├── auth/                 # Authentication services
+│   │   │   └── validate_role.php
+│   │   ├── cart/                 # Shopping cart logic
+│   │   │   └── validate_checkout.php
+│   │   ├── listings/             # Food listing management
+│   │   │   ├── report.php
+│   │   │   ├── safety_check.php
+│   │   │   └── validate.php
+│   │   ├── config/               # Firebase configuration
+│   │   │   ├── firebase_config.php
+│   │   │   └── mealdeal-10385-firebase-adminsdk-*.json
+│   │   └── test/                 # Backend tests
+│   ├── php_auth/                 # PHP authentication module
+│   │   ├── public/              # Public API endpoints
+│   │   ├── src/                 # Source files
+│   │   │   └── AuthHandler.php
+│   │   └── config/              # Configuration
+│   ├── docs/                     # Documentation
+│   ├── backups/                  # Backup files
+│   ├── firebase.json             # Firebase hosting config
+│   ├── firestore.rules           # Firestore security rules
+│   ├── firestore.indexes.json    # Firestore indexes
+│   ├── pubspec.yaml              # Flutter dependencies
+│   ├── BUILD_APK_GUIDE.md        # Build instructions
+│   ├── FIREBASE_VERIFICATION_SETUP.md
+│   ├── HOT_RELOAD_GUIDE.md
+│   └── TROUBLESHOOTING.md
+│
+├── web_admin/                     # Web admin dashboard
+│   ├── assets/                   # Static assets
+│   │   ├── css/
+│   │   │   └── admin.css         # Centralized admin styles
+│   │   └── js/
+│   │       ├── admin.js
+│   │       ├── leaderboard.js    # Leaderboard charts
+│   │       └── reports.js
 │   ├── api/                      # API endpoints
+│   │   ├── dashboard_stats.php
+│   │   ├── get_ai_analysis.php
+│   │   ├── get_comprehensive_stats.php
+│   │   ├── get_disputes.php
+│   │   ├── get_listings.php
+│   │   ├── get_pricing_alerts.php
+│   │   ├── get_recent_flags.php
+│   │   ├── get_report_details.php
+│   │   ├── get_user_contributions.php
+│   │   └── get_users.php
 │   ├── config/                   # Configuration files
+│   │   ├── database.php          # Database configuration
+│   │   └── firebase-credentials.json
 │   ├── includes/                 # Shared PHP includes
-│   └── *.php                     # Dashboard pages
-├── backend/                      # PHP backend services
-│   ├── auth/                     # Authentication services
-│   ├── cart/                     # Shopping cart logic
-│   ├── listings/                 # Food listing management
-│   └── config/                   # Firebase configuration
-└── README.md                     # This file
+│   │   ├── auth.php              # Authentication helpers
+│   │   ├── cache.php             # Caching functions
+│   │   ├── data_functions.php     # Data manipulation
+│   │   ├── firestore_rest_adapter.php
+│   │   ├── refresh_cache.php
+│   │   └── stats.php             # Statistics functions
+│   ├── partials/                 # Reusable partials
+│   │   └── header.php            # Header navigation
+│   ├── cron/                      # Scheduled tasks
+│   │   ├── build_stats.php
+│   │   ├── update_leaderboard_aggregates.php
+│   │   └── stats_cache.json
+│   ├── index.php                 # Main dashboard
+│   ├── dashboard.php             # Dashboard page
+│   ├── login.php                  # Admin login
+│   ├── logout.php                 # Logout handler
+│   ├── users.php                  # User management
+│   ├── listings.php               # Content moderation
+│   ├── reports.php                # Report management
+│   ├── leaderboard.php            # Leaderboard page
+│   ├── impact.php                 # Impact tracking
+│   ├── pricing.php                # Pricing control
+│   ├── create_admin.php           # Admin account creation
+│   ├── composer.json              # PHP dependencies
+│   └── README.md                   # Admin documentation
+│
+├── CLEANUP_SUMMARY.md             # Project cleanup notes
+└── README.md                      # This file
 ```
 
 ## 🚀 Getting Started
